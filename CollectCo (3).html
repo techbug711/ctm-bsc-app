@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>CollectCo — Parcel Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0a0a0f; --surface:#13131a; --surface2:#1c1c28; --border:#2a2a3a;
+    --accent:#00e5a0; --accent2:#7b6dff; --accent3:#ff6b6b; --accent4:#ffb347;
+    --text:#f0f0f8; --muted:#6b6b88;
+    --zone-f:#00e5a0; --zone-bl:#7b6dff; --zone-bm:#ffb347; --zone-bh:#ff6b6b;
+  }
+  body.light {
+    --bg:#f4f6fa; --surface:#ffffff; --surface2:#eef1f7; --border:#d0d5e0;
+    --text:#1a1a2e; --muted:#7a8099;
+    --accent:#00a572; --accent2:#5b4fcf; --accent3:#d94040; --accent4:#d4840a;
+    --zone-f:#00a572; --zone-bl:#5b4fcf; --zone-bm:#d4840a; --zone-bh:#d94040;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{font-family:'Roboto',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background .25s,color .25s}
+
+  .nav{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:100;gap:10px;flex-wrap:wrap;transition:background .25s,border-color .25s}
+  .nav-logo{font-size:24px;font-weight:800;letter-spacing:-.5px;white-space:nowrap}
+  .nav-logo span{color:var(--accent)}
+  .nav-right{display:flex;align-items:center;gap:10px}
+  .conn-status{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:var(--muted);white-space:nowrap}
+  .conn-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);transition:all .3s}
+  .conn-dot.online{background:var(--accent);box-shadow:0 0 7px var(--accent)}
+  .conn-dot.offline{background:var(--accent3)}
+  .theme-btn{padding:10px 14px;border-radius:9px;border:1.5px solid var(--border);background:var(--surface2);color:var(--muted);font-size:18px;cursor:pointer;transition:all .2s;line-height:1}
+  .theme-btn:hover{border-color:var(--accent);color:var(--text)}
+  .nav-tabs{display:flex;gap:4px;background:var(--surface);border-radius:12px;padding:4px}
+  .nav-tab{padding:11px 16px;border-radius:8px;font-size:15px;font-weight:800;cursor:pointer;transition:all .2s;color:var(--muted);border:none;background:none;font-family:'Roboto',sans-serif;letter-spacing:.5px;text-transform:uppercase}
+  .nav-tab.active{background:var(--surface2);color:var(--text)}
+
+  .screen{display:none;padding:20px;max-width:680px;margin:0 auto}
+  .screen.active{display:block}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;margin-bottom:18px;transition:background .25s,border-color .25s}
+  .card-title{font-size:14px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:16px}
+
+  .mode-selector{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+  .mode-btn{padding:22px 12px;border-radius:16px;border:2px solid var(--border);background:var(--surface);color:var(--muted);font-family:'Roboto',sans-serif;font-weight:800;font-size:17px;cursor:pointer;transition:all .2s;text-align:center;line-height:1.5}
+  .mode-btn.sel-f{border-color:var(--zone-f);background:rgba(0,229,160,.08);color:var(--zone-f)}
+  .mode-btn.sel-bl{border-color:var(--zone-bl);background:rgba(123,109,255,.08);color:var(--zone-bl)}
+  .mode-btn.sel-bm{border-color:var(--zone-bm);background:rgba(255,179,71,.08);color:var(--zone-bm)}
+  .mode-btn.sel-bh{border-color:var(--zone-bh);background:rgba(255,107,107,.08);color:var(--zone-bh)}
+  .mode-sub{font-size:13px;font-weight:700;letter-spacing:.8px;opacity:.7;margin-top:4px}
+
+  .mode-banner{padding:14px 18px;border-radius:12px;font-size:15px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:18px;text-align:center;display:none}
+  .mode-banner.show{display:block}
+  .banner-f{background:rgba(0,229,160,.1);color:var(--zone-f);border:1px solid rgba(0,229,160,.25)}
+  .banner-bl{background:rgba(123,109,255,.1);color:var(--zone-bl);border:1px solid rgba(123,109,255,.25)}
+  .banner-bm{background:rgba(255,179,71,.1);color:var(--zone-bm);border:1px solid rgba(255,179,71,.25)}
+  .banner-bh{background:rgba(255,107,107,.1);color:var(--zone-bh);border:1px solid rgba(255,107,107,.25)}
+
+  .scan-row{display:flex;gap:10px;align-items:stretch}
+  .scan-row .scan-input{flex:1}
+  .cam-btn{padding:0 20px;border-radius:16px;border:2px solid var(--border);background:var(--surface2);color:var(--muted);font-size:24px;cursor:pointer;transition:all .2s;white-space:nowrap;display:flex;align-items:center;justify-content:center}
+  .cam-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .cam-btn.active{border-color:var(--accent);background:rgba(0,229,160,.1);color:var(--accent)}
+  .cam-btn.outbound-cam{padding:0 18px;border-radius:14px;border:2px solid var(--border);background:var(--surface2);color:var(--muted);font-size:22px;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center}
+  .cam-btn.outbound-cam.active{border-color:var(--accent);background:rgba(0,229,160,.1);color:var(--accent)}
+  .cam-view{margin-top:14px;border-radius:16px;overflow:hidden;border:2px solid var(--accent);display:none;position:relative;background:#000}
+  .cam-view.show{display:block}
+  .cam-view video{width:100%;display:block;border-radius:14px}
+  .cam-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .cam-crosshair{width:200px;height:200px;border:3px solid var(--accent);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
+  .cam-hint-overlay{position:absolute;bottom:12px;left:0;right:0;text-align:center;color:#fff;font-size:13px;font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,.8)}
+  .cam-stop-btn{width:100%;padding:14px;border-radius:12px;border:none;background:rgba(255,107,107,.15);color:var(--accent3);font-family:'Roboto',sans-serif;font-weight:800;font-size:15px;cursor:pointer;margin-top:10px;border:1.5px solid var(--accent3);display:none}
+  .cam-stop-btn.show{display:block}
+  .scan-input{width:100%;padding:22px 22px;background:var(--surface2);border:2px solid var(--border);border-radius:16px;color:var(--text);font-family:'Roboto',sans-serif;font-size:22px;font-weight:500;outline:none;transition:border-color .2s}
+  .scan-input:focus{border-color:var(--accent)}
+  .scan-input::placeholder{color:var(--muted);font-size:17px}
+  .scan-hint{font-size:14px;font-weight:600;color:var(--muted);margin-top:10px;font-family:'Roboto',sans-serif}
+
+  .assign-result{border-radius:18px;padding:32px;text-align:center;margin-top:18px;display:none;animation:popIn .3s ease}
+  .assign-result.show{display:block}
+  .ar-zf{background:rgba(0,229,160,.1);border:2px solid var(--zone-f)}
+  .ar-zb{background:rgba(123,109,255,.1);border:2px solid var(--accent2)}
+  .ar-label{font-size:14px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;opacity:.7}
+  .ar-loc{font-size:80px;font-weight:800;letter-spacing:-2px;line-height:1}
+  .ar-sub{font-size:16px;font-weight:700;margin-top:12px;color:var(--muted);font-family:'Roboto',sans-serif}
+  .ar-track{font-size:14px;margin-top:6px;color:var(--muted);font-family:'Roboto',sans-serif;opacity:.6}
+
+  .rack-grid-card{display:none;margin-top:0}
+  .rack-grid-card.show{display:block}
+  .rack-grid-layout{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+  .rack-col{display:flex;flex-direction:column;gap:6px}
+  .rack-col-title{font-size:14px;font-weight:900;color:var(--muted);font-family:'Roboto',sans-serif;text-align:center;padding:6px 0;border-bottom:2px solid var(--border);margin-bottom:2px}
+  .shelf-btn{padding:16px 4px;border-radius:11px;border:1.5px solid var(--border);background:var(--surface2);color:var(--muted);font-family:'Roboto',sans-serif;font-weight:800;font-size:13px;cursor:pointer;transition:all .2s;text-align:center;line-height:1.4;width:100%}
+  .shelf-btn:hover:not(.disabled){border-color:var(--accent2);color:var(--text)}
+  .shelf-btn.selected{border-color:var(--accent)!important;background:rgba(0,229,160,.12);color:var(--accent)}
+  .shelf-btn.disabled{opacity:.25;cursor:not-allowed}
+  .shelf-btn .cap{font-size:11px;opacity:.6;font-weight:600}
+  .confirm-btn{width:100%;padding:20px;border-radius:16px;border:none;background:var(--accent);color:#000;font-family:'Roboto',sans-serif;font-weight:900;font-size:18px;cursor:pointer;margin-top:18px;transition:all .2s;display:none}
+  .confirm-btn.show{display:block}
+  .confirm-btn:active{transform:scale(.98)}
+
+  .search-row{display:flex;gap:10px}
+  .search-input{flex:1;padding:20px 20px;background:var(--surface2);border:2px solid var(--border);border-radius:16px;color:var(--text);font-family:'Roboto',sans-serif;font-size:30px;font-weight:500;outline:none;transition:border-color .2s;letter-spacing:4px;text-transform:uppercase}
+  .search-input:focus{border-color:var(--accent)}
+  .search-input::placeholder{font-size:18px;letter-spacing:1px;color:var(--muted)}
+  .search-btn{padding:20px 24px;border-radius:16px;border:none;background:var(--accent2);color:#fff;font-family:'Roboto',sans-serif;font-weight:800;cursor:pointer;font-size:17px;white-space:nowrap}
+  .add-more-btn{width:100%;padding:16px;border-radius:12px;border:1.5px dashed var(--border);background:none;color:var(--muted);font-family:'Roboto',sans-serif;font-weight:700;cursor:pointer;margin-top:12px;font-size:16px;transition:all .2s;display:none}
+  .add-more-btn:hover{border-color:var(--accent2);color:var(--text)}
+  .not-found{background:rgba(255,107,107,.1);border:1.5px solid var(--accent3);border-radius:14px;padding:20px;text-align:center;color:var(--accent3);margin-top:14px;display:none;font-size:16px;font-weight:700}
+  .not-found.show{display:block}
+
+  .parcel-item{display:flex;align-items:center;justify-content:space-between;padding:20px;background:var(--surface2);border-radius:15px;margin-bottom:10px;border:1.5px solid var(--border);animation:slideIn .2s ease}
+  .parcel-item.done{opacity:.35}
+  .parcel-track{font-family:'Roboto',sans-serif;font-size:14px;font-weight:500;color:var(--muted)}
+  .parcel-loc{font-size:36px;font-weight:800;letter-spacing:-1px;margin-top:2px}
+  .loc-f{color:var(--zone-f)} .loc-b{color:var(--zone-bl)}
+  .type-tag{font-size:13px;font-weight:800;padding:4px 10px;border-radius:7px;margin-top:5px;display:inline-block}
+  .tag-f{background:rgba(0,229,160,.15);color:var(--zone-f)}
+  .tag-bl{background:rgba(123,109,255,.15);color:var(--zone-bl)}
+  .tag-bm{background:rgba(255,179,71,.15);color:var(--zone-bm)}
+  .tag-bh{background:rgba(255,107,107,.15);color:var(--zone-bh)}
+  .markout-btn{padding:14px 20px;border-radius:12px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-family:'Roboto',sans-serif;font-weight:800;font-size:15px;cursor:pointer;transition:all .2s;white-space:nowrap}
+  .markout-btn:hover:not(.done-btn){border-color:var(--accent);color:var(--accent)}
+  .markout-btn.done-btn{border-color:var(--accent);color:var(--accent);background:rgba(0,229,160,.08)}
+  .markall-btn{width:100%;padding:20px;border-radius:16px;border:none;background:var(--accent);color:#000;font-family:'Roboto',sans-serif;font-weight:800;font-size:18px;cursor:pointer;margin-top:14px;display:none}
+  .markall-btn.show{display:block}
+  .clear-btn{width:100%;padding:15px;border-radius:12px;border:1.5px solid var(--border);background:none;color:var(--muted);font-family:'Roboto',sans-serif;font-weight:700;cursor:pointer;margin-top:10px;font-size:16px;display:none}
+  .clear-btn.show{display:block}
+
+  .stats-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;transition:background .25s,border-color .25s}
+  .stat-num{font-size:52px;font-weight:800;letter-spacing:-2px}
+  .stat-lbl{font-size:13px;font-weight:800;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:4px}
+  .zone-section{margin-bottom:22px}
+  .zone-title{font-size:15px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+  .zone-title.f{color:var(--zone-f)} .zone-title.b{color:var(--zone-bl)}
+  .slot-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+  .slot-item{background:var(--surface2);border-radius:11px;padding:13px 6px;text-align:center;border:1.5px solid var(--border);transition:all .3s}
+  .slot-item.empty{opacity:.25}
+  .slot-item.warn{border-color:var(--accent4)}
+  .slot-item.full-slot{border-color:var(--accent3)}
+  .slot-name{font-size:12px;font-weight:800;color:var(--muted);font-family:'Roboto',sans-serif}
+  .slot-count{font-size:24px;font-weight:800;margin-top:3px}
+  .slot-bar{height:4px;border-radius:2px;margin-top:7px;background:var(--border);overflow:hidden}
+  .slot-bar-fill{height:100%;border-radius:2px;transition:width .4s ease}
+  .rack-dash-grid{display:flex;flex-direction:column;gap:10px}
+  .rack-card-d{background:var(--surface2);border-radius:14px;padding:16px;border:1.5px solid var(--border);transition:background .25s,border-color .25s}
+  .rack-card-title{font-size:15px;font-weight:900;color:var(--text);font-family:'Roboto',sans-serif;margin-bottom:12px}
+  .rack-shelves-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .rack-shelf-cell{background:var(--surface);border-radius:10px;padding:12px 8px;text-align:center;border:1.5px solid var(--border)}
+  .rsc-name{font-size:12px;font-weight:800;color:var(--muted);font-family:'Roboto',sans-serif}
+  .rsc-tag{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;margin:4px auto;display:inline-block}
+  .rsc-count{font-size:20px;font-weight:900}
+  .rsc-bar{height:4px;border-radius:2px;margin-top:6px;background:var(--border);overflow:hidden}
+  .rsc-bar-fill{height:100%;border-radius:2px;transition:width .4s ease}
+
+  .hist-item{padding:16px 18px;background:var(--surface2);border-radius:12px;margin-bottom:8px;border-left:4px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .hist-item.in{border-left-color:var(--accent)}
+  .hist-item.out{border-left-color:var(--accent3)}
+  .hist-track{font-family:'Roboto',sans-serif;font-size:14px;font-weight:500;color:var(--muted)}
+  .hist-loc{font-size:20px;font-weight:800}
+  .hist-time{font-size:13px;font-weight:600;color:var(--muted);font-family:'Roboto',sans-serif;margin-top:4px}
+  .hist-badge{font-size:12px;font-weight:800;padding:4px 10px;border-radius:6px}
+  .badge-in{background:rgba(0,229,160,.15);color:var(--accent)}
+  .badge-out{background:rgba(255,107,107,.15);color:var(--accent3)}
+
+  .setting-row{display:flex;align-items:center;justify-content:space-between;padding:18px 0;border-bottom:1px solid var(--border)}
+  .setting-lbl{font-size:17px;font-weight:800}
+  .setting-sub{font-size:13px;font-weight:600;color:var(--muted);margin-top:3px}
+  .setting-inp{width:80px;padding:11px 12px;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:'Roboto',sans-serif;font-size:18px;font-weight:700;text-align:center;outline:none}
+  .reset-btn{width:100%;padding:18px;border-radius:14px;border:1.5px solid var(--accent3);background:none;color:var(--accent3);font-family:'Roboto',sans-serif;font-weight:800;cursor:pointer;margin-top:16px;font-size:17px}
+  .save-settings-btn{width:100%;padding:18px;border-radius:14px;border:none;background:var(--accent2);color:#fff;font-family:'Roboto',sans-serif;font-weight:800;cursor:pointer;margin-top:12px;font-size:17px}
+
+  .empty-state{text-align:center;padding:44px 20px;color:var(--muted)}
+  .empty-icon{font-size:44px;margin-bottom:14px}
+  .empty-text{font-size:17px;font-weight:700}
+
+  .loading-overlay{position:fixed;inset:0;background:rgba(10,10,15,.92);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:18px}
+  .loading-overlay.hidden{display:none}
+  .loading-spinner{width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+  .loading-text{font-size:17px;font-weight:700;color:var(--muted)}
+
+  .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:16px 30px;font-size:17px;font-weight:700;opacity:0;transition:all .3s;z-index:9999;white-space:nowrap;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.success{border-color:var(--accent);color:var(--accent)}
+  .toast.error{border-color:var(--accent3);color:var(--accent3)}
+  .toast.info{border-color:var(--accent2);color:var(--accent2)}
+
+  @keyframes popIn{from{transform:scale(.9);opacity:0}to{transform:scale(1);opacity:1}}
+  @keyframes slideIn{from{transform:translateY(-8px);opacity:0}to{transform:translateY(0);opacity:1}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Connecting to CollectCo...</div>
+</div>
+
+<div class="nav">
+  <div class="nav-logo">Collect<span>Co</span> <span style="font-size:11px;color:var(--muted);font-weight:400">Taman Melewar</span></div>
+  <div class="nav-right">
+    <div class="conn-status">
+      <div class="conn-dot" id="conn-dot"></div>
+      <span id="conn-text">...</span>
+    </div>
+    <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark">🌙</button>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showScreen('inbound',this)">In</button>
+      <button class="nav-tab" onclick="showScreen('outbound',this)">Out</button>
+      <button class="nav-tab" onclick="showScreen('dashboard',this)">Live</button>
+      <button class="nav-tab" onclick="showScreen('history',this)">Log</button>
+      <button class="nav-tab" onclick="showScreen('settings',this)">⚙</button>
+    </div>
+  </div>
+</div>
+
+<!-- INBOUND -->
+<div class="screen active" id="screen-inbound">
+  <div class="card">
+    <div class="card-title">Step 1 — Select Parcel Type</div>
+    <div class="mode-selector">
+      <button class="mode-btn" id="btn-F" onclick="setMode('F')">📄 Zone F<div class="mode-sub">Flyer / Small</div></button>
+      <button class="mode-btn" id="btn-BL" onclick="setMode('BL')">🪶 B-Light<div class="mode-sub">Light Box</div></button>
+      <button class="mode-btn" id="btn-BM" onclick="setMode('BM')">📦 B-Medium<div class="mode-sub">Medium Box</div></button>
+      <button class="mode-btn" id="btn-BH" onclick="setMode('BH')">🏋️ B-Heavy<div class="mode-sub">Heavy Box</div></button>
+    </div>
+    <div class="mode-banner" id="mode-banner"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Step 2 — Scan Barcode</div>
+    <div class="scan-row">
+      <input class="scan-input" id="scan-in" type="text" placeholder="Scan or type barcode..." autocomplete="off">
+      <button class="cam-btn" id="cam-btn-in" onclick="toggleCamera('inbound')" title="Use camera">📷</button>
+    </div>
+    <div class="scan-hint">Barcode scanner auto-submits · Press Enter · Or use 📷 camera</div>
+    <div class="cam-view" id="cam-view-in">
+      <div id="cam-reader-in"></div>
+      <div class="cam-overlay"><div class="cam-crosshair"></div></div>
+      <div class="cam-hint-overlay">Point at barcode or QR code</div>
+    </div>
+    <button class="cam-stop-btn" id="cam-stop-in" onclick="stopCamera('inbound')">✕ Stop Camera</button>
+  </div>
+  <div class="assign-result" id="assign-result">
+    <div class="ar-label" id="ar-label"></div>
+    <div class="ar-loc" id="ar-loc"></div>
+    <div class="ar-sub" id="ar-sub"></div>
+    <div class="ar-track" id="ar-track"></div>
+  </div>
+  <div class="card rack-grid-card" id="rack-grid-card">
+    <div class="card-title">Step 3 — Select Shelf Position</div>
+    <div id="rack-buttons"></div>
+    <button class="confirm-btn" id="confirm-btn" onclick="confirmBAssign()">✓ Confirm Placement</button>
+  </div>
+</div>
+
+<!-- OUTBOUND -->
+<div class="screen" id="screen-outbound">
+  <div class="card">
+    <div class="card-title">Search by Last 4 Characters of Tracking No.</div>
+    <div class="search-row">
+      <input class="search-input" id="search-in" maxlength="4" placeholder="_ _ _ _">
+      <button class="search-btn" onclick="addToOutbound()">Find</button>
+      <button class="cam-btn outbound-cam" id="cam-btn-out" onclick="toggleCamera('outbound')" title="Scan full tracking number with camera">📷</button>
+    </div>
+    <div class="scan-hint" style="margin-top:7px">Type last 4 digits/letters · Or use 📷 to scan full barcode</div>
+    <div class="cam-view" id="cam-view-out">
+      <div id="cam-reader-out"></div>
+      <div class="cam-overlay"><div class="cam-crosshair"></div></div>
+      <div class="cam-hint-overlay">Point at barcode or QR code</div>
+    </div>
+    <button class="cam-stop-btn" id="cam-stop-out" onclick="stopCamera('outbound')">✕ Stop Camera</button>
+    <button class="add-more-btn" id="add-more-btn" onclick="document.getElementById('search-in').focus()">+ Add another parcel</button>
+  </div>
+  <div class="not-found" id="not-found">❌ No pending parcel found. Check the tracking number.</div>
+  <div id="parcel-list"></div>
+  <button class="markall-btn" id="markall-btn" onclick="markAllCollected()">✓ Mark All as Collected</button>
+  <button class="clear-btn" id="clear-btn" onclick="clearOutbound()">Clear list</button>
+</div>
+
+<!-- DASHBOARD -->
+<div class="screen" id="screen-dashboard">
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-num" id="s-total">—</div><div class="stat-lbl">Total Logged</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--accent4)" id="s-pending">—</div><div class="stat-lbl">Pending</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--zone-f)" id="s-zf">—</div><div class="stat-lbl">Zone F Pending</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--zone-bl)" id="s-zb">—</div><div class="stat-lbl">Zone B Pending</div></div>
+  </div>
+  <div class="zone-section">
+    <div class="zone-title f">Zone F — Flyers & Small Parcels</div>
+    <div class="slot-grid" id="zf-grid"></div>
+  </div>
+  <div class="zone-section">
+    <div class="zone-title b">Zone B — Boxes</div>
+    <div class="rack-dash-grid" id="zb-grid"></div>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div class="screen" id="screen-history">
+  <div class="card">
+    <div class="card-title">Recent Activity (last 100)</div>
+    <div id="hist-list"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No activity yet</div></div></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="screen" id="screen-settings">
+  <div class="card">
+    <div class="card-title">Zone F Configuration</div>
+    <div class="setting-row">
+      <div><div class="setting-lbl">Number of Slots</div><div class="setting-sub">Physical slot sections</div></div>
+      <input class="setting-inp" id="set-fSlots" type="number" value="32" min="1" max="200">
+    </div>
+    <div class="setting-row" style="border:none">
+      <div><div class="setting-lbl">Capacity per Slot</div><div class="setting-sub">Max flyers per slot</div></div>
+      <input class="setting-inp" id="set-fCap" type="number" value="10" min="1" max="500">
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Zone B Configuration</div>
+    <div class="setting-row">
+      <div><div class="setting-lbl">Number of Racks</div><div class="setting-sub">Physical rack units</div></div>
+      <input class="setting-inp" id="set-bRacks" type="number" value="5" min="1" max="20">
+    </div>
+    <div class="setting-row" style="border:none">
+      <div><div class="setting-lbl">Capacity per Shelf</div><div class="setting-sub">Max boxes per shelf position</div></div>
+      <input class="setting-inp" id="set-bCap" type="number" value="8" min="1" max="100">
+    </div>
+  </div>
+  <div class="card" style="font-size:12px;color:var(--muted);line-height:1.9">
+    <div class="card-title">Shelf Suitability Guide</div>
+    <b style="color:var(--zone-bl)">S4 (Top)</b> — Light boxes only<br>
+    <b style="color:var(--zone-bm)">S3</b> — Light &amp; Medium boxes<br>
+    <b style="color:var(--zone-bh)">S2 &amp; S1 (Bottom)</b> — All types including heavy
+  </div>
+  <button class="save-settings-btn" onclick="saveSettings()">💾 Save &amp; Sync Settings to All Devices</button>
+  <button class="reset-btn" onclick="confirmReset()">⚠ Reset All Parcel Data</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+// ── FIREBASE ──────────────────────────────────────────────────────────────
+firebase.initializeApp({
+  apiKey:"AIzaSyDiN6Bbonnkl_zzcK--IdVjlRnuKsxeVoA",
+  authDomain:"ctm-bsc.firebaseapp.com",
+  databaseURL:"https://ctm-bsc-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"ctm-bsc",
+  storageBucket:"ctm-bsc.firebasestorage.app",
+  messagingSenderId:"847937593616",
+  appId:"1:847937593616:web:c4dab6f0ceb0eee5b88595"
+});
+const db = firebase.database();
+const R = 'collectco';
+const INC = firebase.database.ServerValue.increment;
+
+// ── LOCAL CACHE ───────────────────────────────────────────────────────────
+let cfg = { fSlots:32, fCap:10, bRacks:5, bCap:8 };
+let zfSlots = {}, zbShelves = {};
+let stats = { total:0, pending:0, zfPending:0, zbPending:0 };
+
+// ── UI STATE ──────────────────────────────────────────────────────────────
+let currentMode = null, pendingTracking = null, selectedShelf = null;
+let outboundList = [], scanTimer = null, isProcessing = false;
+
+// ── CONNECTION STATUS ─────────────────────────────────────────────────────
+db.ref('.info/connected').on('value', s => {
+  const on = !!s.val();
+  document.getElementById('conn-dot').className = 'conn-dot '+(on?'online':'offline');
+  document.getElementById('conn-text').textContent = on ? 'Live' : 'Offline';
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+async function init() {
+  const s = await db.ref(`${R}/settings`).once('value');
+  if(s.val()) { cfg={...cfg,...s.val()}; applySettingsToUI(); }
+
+  db.ref(`${R}/settings`).on('value', s => { if(s.val()){cfg={...cfg,...s.val()};applySettingsToUI();} });
+  db.ref(`${R}/zfSlots`).on('value',  s => { zfSlots=s.val()||{}; if(isDash()) renderZFGrid(); });
+  db.ref(`${R}/zbShelves`).on('value',s => { zbShelves=s.val()||{}; if(isDash()) renderZBGrid(); });
+  db.ref(`${R}/stats`).on('value',    s => { if(s.val()){stats={...stats,...s.val()};if(isDash())renderStats();} });
+
+  document.getElementById('loading').className = 'loading-overlay hidden';
+  applyTheme();
+  document.getElementById('scan-in').focus();
+}
+
+// ── NAV ───────────────────────────────────────────────────────────────────
+function showScreen(name, btn) {
+  stopCamera('inbound');
+  stopCamera('outbound');
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(name==='dashboard'){ renderStats(); renderZFGrid(); renderZBGrid(); }
+  if(name==='history') loadHistory();
+  if(name==='inbound') setTimeout(()=>document.getElementById('scan-in').focus(),80);
+}
+function isDash(){ return document.getElementById('screen-dashboard').classList.contains('active'); }
+
+// ── MODE SELECT ───────────────────────────────────────────────────────────
+const MODE_SEL = {F:'sel-f',BL:'sel-bl',BM:'sel-bm',BH:'sel-bh'};
+const MODE_BAN = {F:'banner-f',BL:'banner-bl',BM:'banner-bm',BH:'banner-bh'};
+const MODE_LBL = {F:'📄 Zone F — Flyers & Small',BL:'🪶 B-Light Mode',BM:'📦 B-Medium Mode',BH:'🏋️ B-Heavy Mode'};
+const TYPE_LBL = {F:'Zone F',BL:'B-Light',BM:'B-Medium',BH:'B-Heavy'};
+const SHELF_OK = {S4:['BL'],S3:['BL','BM'],S2:['BL','BM','BH'],S1:['BL','BM','BH']};
+
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.className='mode-btn');
+  document.getElementById('btn-'+mode).classList.add(MODE_SEL[mode]);
+  const ban = document.getElementById('mode-banner');
+  ban.className = 'mode-banner show '+MODE_BAN[mode];
+  ban.textContent = MODE_LBL[mode];
+  document.getElementById('assign-result').className = 'assign-result';
+  document.getElementById('rack-grid-card').className = 'card rack-grid-card';
+  document.getElementById('scan-in').value = '';
+  document.getElementById('scan-in').focus();
+  selectedShelf = null; pendingTracking = null;
+}
+
+// ── SCAN INPUT ────────────────────────────────────────────────────────────
+const scanIn = document.getElementById('scan-in');
+scanIn.addEventListener('keydown', e => { if(e.key==='Enter'&&scanIn.value.trim()) handleScan(scanIn.value.trim()); });
+scanIn.addEventListener('input', () => {
+  clearTimeout(scanTimer);
+  if(scanIn.value.trim().length >= 17) scanTimer = setTimeout(()=>handleScan(scanIn.value.trim()), 350);
+});
+
+async function handleScan(raw) {
+  if(isProcessing) return;
+  if(!currentMode){ showToast('Select a parcel type first!','error'); scanIn.value=''; return; }
+  const tracking = raw.toUpperCase().replace(/\s/g,'');
+  scanIn.value=''; isProcessing=true;
+  try {
+    const ex = await db.ref(`${R}/parcels/${tracking}`).once('value');
+    if(ex.val()&&ex.val().status==='pending'){ showToast('Already logged → '+ex.val().location,'info'); return; }
+    if(currentMode==='F') { await processZoneF(tracking); }
+    else { pendingTracking=tracking; document.getElementById('rack-grid-card').className='card rack-grid-card show'; renderRackGrid(); document.getElementById('assign-result').className='assign-result'; }
+  } catch(e){ showToast('Error: '+e.message,'error'); }
+  finally{ isProcessing=false; scanIn.focus(); }
+}
+
+// ── ZONE F AUTO-ASSIGN ────────────────────────────────────────────────────
+async function processZoneF(tracking) {
+  showToast('Assigning slot...','info');
+  let assignedSlot = null;
+  const res = await db.ref(`${R}/zfSlots`).transaction(cur => {
+    const s=cur||{}; let min=Infinity,slot=null;
+    for(let i=0;i<cfg.fSlots;i++){ const c=s[i]||0; if(c<cfg.fCap&&c<min){min=c;slot=i;} }
+    if(slot===null) return undefined;
+    assignedSlot=slot; s[slot]=(s[slot]||0)+1; return s;
+  });
+  if(!res.committed){ showToast('All Zone F slots are full!','error'); return; }
+
+  const loc='F-'+(assignedSlot+1);
+  const updates={};
+  updates[`${R}/parcels/${tracking}`]={location:loc,type:'F',status:'pending',timestamp:Date.now(),collectedAt:null,suffix:tracking.slice(-4)};
+  updates[`${R}/stats/total`]=INC(1); updates[`${R}/stats/pending`]=INC(1); updates[`${R}/stats/zfPending`]=INC(1);
+  await db.ref().update(updates);
+  db.ref(`${R}/history`).push({type:'inbound',tracking,location:loc,parcelType:'F',time:Date.now()});
+  showResult('ar-zf','📄 Zone F — Auto Assigned',loc,'Place in slot '+loc,tracking);
+}
+
+// ── ZONE B MANUAL ASSIGN ──────────────────────────────────────────────────
+function renderRackGrid() {
+  const cont=document.getElementById('rack-buttons');
+  cont.innerHTML=''; selectedShelf=null;
+  document.getElementById('confirm-btn').className='confirm-btn';
+
+  const layout=document.createElement('div');
+  layout.className='rack-grid-layout';
+
+  for(let r=1;r<=cfg.bRacks;r++){
+    const col=document.createElement('div');
+    col.className='rack-col';
+    const title=document.createElement('div');
+    title.className='rack-col-title';
+    title.textContent='R'+r;
+    col.appendChild(title);
+
+    ['S4','S3','S2','S1'].forEach((s,idx)=>{
+      const key='R'+r+'-'+s, count=zbShelves[key]||0;
+      const ok=SHELF_OK[s].includes(currentMode), full=count>=cfg.bCap;
+      const disabled=!ok||full;
+      const labels=['S4 ↑ Top','S3','S2','S1 ↓ Bot'];
+      const btn=document.createElement('button');
+      btn.className='shelf-btn'+(disabled?' disabled':'');
+      btn.innerHTML=`${labels[idx]}<br><span class="cap">${count}/${cfg.bCap}</span>`;
+      if(!disabled) btn.onclick=()=>selectShelf(key,btn);
+      col.appendChild(btn);
+    });
+    layout.appendChild(col);
+  }
+  cont.appendChild(layout);
+}
+
+function selectShelf(key,btn) {
+  document.querySelectorAll('.shelf-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected'); selectedShelf=key;
+  document.getElementById('confirm-btn').className='confirm-btn show';
+}
+
+async function confirmBAssign() {
+  if(!selectedShelf||!pendingTracking||isProcessing) return;
+  isProcessing=true;
+  try {
+    const updates={};
+    updates[`${R}/parcels/${pendingTracking}`]={location:selectedShelf,type:currentMode,status:'pending',timestamp:Date.now(),collectedAt:null,suffix:pendingTracking.slice(-4)};
+    updates[`${R}/zbShelves/${selectedShelf}`]=INC(1);
+    updates[`${R}/stats/total`]=INC(1); updates[`${R}/stats/pending`]=INC(1); updates[`${R}/stats/zbPending`]=INC(1);
+    await db.ref().update(updates);
+    db.ref(`${R}/history`).push({type:'inbound',tracking:pendingTracking,location:selectedShelf,parcelType:currentMode,time:Date.now()});
+    showResult('ar-zb','📦 Zone B — Placed',selectedShelf,TYPE_LBL[currentMode],pendingTracking);
+    document.getElementById('rack-grid-card').className='card rack-grid-card';
+    pendingTracking=null; selectedShelf=null;
+  } catch(e){ showToast('Error: '+e.message,'error'); }
+  finally{ isProcessing=false; scanIn.focus(); }
+}
+
+function showResult(cls,label,loc,sub,tracking) {
+  const el=document.getElementById('assign-result'); el.className='assign-result show '+cls;
+  document.getElementById('ar-label').textContent=label;
+  document.getElementById('ar-loc').textContent=loc;
+  document.getElementById('ar-sub').textContent=sub;
+  document.getElementById('ar-track').textContent=tracking;
+}
+
+// ── OUTBOUND ──────────────────────────────────────────────────────────────
+const searchIn=document.getElementById('search-in');
+searchIn.addEventListener('input',()=>{ searchIn.value=searchIn.value.toUpperCase(); });
+searchIn.addEventListener('keydown',e=>{ if(e.key==='Enter') addToOutbound(); });
+
+async function addToOutbound() {
+  const q=searchIn.value.trim().toUpperCase();
+  if(q.length<2){ showToast('Enter at least 2 characters','error'); return; }
+  searchIn.value='';
+  document.getElementById('not-found').className='not-found';
+  const snap=await db.ref(`${R}/parcels`).orderByChild('status').equalTo('pending').once('value');
+  const matches=[];
+  snap.forEach(c=>{ if(c.key.endsWith(q)&&!outboundList.find(o=>o.tracking===c.key)) matches.push({tracking:c.key,...c.val(),done:false}); });
+  if(matches.length===0){ document.getElementById('not-found').className='not-found show'; return; }
+  outboundList=[...outboundList,...matches];
+  renderOutboundList();
+}
+
+function renderOutboundList() {
+  const list=document.getElementById('parcel-list');
+  const addMore=document.getElementById('add-more-btn');
+  const markAll=document.getElementById('markall-btn');
+  const clearBtn=document.getElementById('clear-btn');
+  if(outboundList.length===0){ list.innerHTML=''; addMore.style.display='none'; markAll.className='markall-btn'; clearBtn.className='clear-btn'; return; }
+  addMore.style.display='block';
+  const allDone=outboundList.every(p=>p.done);
+  markAll.className='markall-btn'+(allDone?'':' show');
+  clearBtn.className='clear-btn'+(allDone?' show':'');
+  const tagCls={F:'tag-f',BL:'tag-bl',BM:'tag-bm',BH:'tag-bh'};
+  list.innerHTML=outboundList.map((p,i)=>`
+    <div class="parcel-item${p.done?' done':''}">
+      <div>
+        <div class="parcel-track">${p.tracking}</div>
+        <div class="parcel-loc ${p.type==='F'?'loc-f':'loc-b'}">${p.location}</div>
+        <span class="type-tag ${tagCls[p.type]||'tag-f'}">${TYPE_LBL[p.type]||p.type}</span>
+      </div>
+      <button class="markout-btn${p.done?' done-btn':''}" onclick="markOne(${i})">${p.done?'✓ Done':'Mark Out'}</button>
+    </div>`).join('');
+}
+
+async function markOne(i) {
+  if(outboundList[i].done) return;
+  await collectParcel(outboundList[i]); outboundList[i].done=true; renderOutboundList();
+  if(outboundList.every(p=>p.done)) showToast('All parcels collected ✓','success');
+}
+
+async function markAllCollected() {
+  for(const p of outboundList.filter(p=>!p.done)){ await collectParcel(p); p.done=true; }
+  renderOutboundList(); showToast('All parcels marked collected ✓','success');
+}
+
+async function collectParcel(p) {
+  const updates={};
+  updates[`${R}/parcels/${p.tracking}/status`]='collected';
+  updates[`${R}/parcels/${p.tracking}/collectedAt`]=Date.now();
+  updates[`${R}/stats/pending`]=INC(-1);
+  if(p.type==='F'){ updates[`${R}/zfSlots/${parseInt(p.location.replace('F-',''))-1}`]=INC(-1); updates[`${R}/stats/zfPending`]=INC(-1); }
+  else { updates[`${R}/zbShelves/${p.location}`]=INC(-1); updates[`${R}/stats/zbPending`]=INC(-1); }
+  await db.ref().update(updates);
+  db.ref(`${R}/history`).push({type:'outbound',tracking:p.tracking,location:p.location,parcelType:p.type,time:Date.now()});
+}
+
+function clearOutbound() { outboundList=[]; renderOutboundList(); document.getElementById('not-found').className='not-found'; }
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────
+function renderStats() {
+  document.getElementById('s-total').textContent=stats.total||0;
+  document.getElementById('s-pending').textContent=stats.pending||0;
+  document.getElementById('s-zf').textContent=stats.zfPending||0;
+  document.getElementById('s-zb').textContent=stats.zbPending||0;
+}
+
+function renderZFGrid() {
+  const grid=document.getElementById('zf-grid'); grid.innerHTML='';
+  for(let i=0;i<cfg.fSlots;i++){
+    const c=zfSlots[i]||0, pct=Math.min(c/cfg.fCap,1);
+    const cls=pct>=1?'full-slot':pct>=0.8?'warn':c===0?'empty':'';
+    const col=pct>=1?'var(--accent3)':pct>=0.8?'var(--accent4)':'var(--accent)';
+    grid.innerHTML+=`<div class="slot-item ${cls}"><div class="slot-name">F-${i+1}</div><div class="slot-count" style="color:${col}">${c}</div><div class="slot-bar"><div class="slot-bar-fill" style="width:${pct*100}%;background:${col}"></div></div></div>`;
+  }
+}
+
+function renderZBGrid() {
+  const grid=document.getElementById('zb-grid'); grid.innerHTML='';
+  const tStyles={S4:'background:rgba(123,109,255,.15);color:var(--zone-bl)',S3:'background:rgba(255,179,71,.15);color:var(--zone-bm)',S2:'background:rgba(255,107,107,.15);color:var(--zone-bh)',S1:'background:rgba(255,107,107,.15);color:var(--zone-bh)'};
+  const tLbls={S4:'Light',S3:'Med',S2:'Heavy OK',S1:'Heavy OK'};
+  const sLabels={S4:'S4 ↑ Top',S3:'S3',S2:'S2',S1:'S1 ↓ Bot'};
+  for(let r=1;r<=cfg.bRacks;r++){
+    let shelves='';
+    ['S4','S3','S2','S1'].forEach(s=>{
+      const key='R'+r+'-'+s, c=zbShelves[key]||0, pct=Math.min(c/cfg.bCap,1);
+      const col=pct>=1?'var(--accent3)':pct>=0.8?'var(--accent4)':'var(--accent)';
+      shelves+=`<div class="rack-shelf-cell">
+        <div class="rsc-name">${sLabels[s]}</div>
+        <div class="rsc-tag" style="${tStyles[s]}">${tLbls[s]}</div>
+        <div class="rsc-count" style="color:${col}">${c}/${cfg.bCap}</div>
+        <div class="rsc-bar"><div class="rsc-bar-fill" style="width:${pct*100}%;background:${col}"></div></div>
+      </div>`;
+    });
+    grid.innerHTML+=`<div class="rack-card-d">
+      <div class="rack-card-title">Rack R${r}</div>
+      <div class="rack-shelves-row">${shelves}</div>
+    </div>`;
+  }
+}
+
+// ── HISTORY ───────────────────────────────────────────────────────────────
+async function loadHistory() {
+  const snap=await db.ref(`${R}/history`).orderByChild('time').limitToLast(100).once('value');
+  const items=[]; snap.forEach(c=>items.unshift(c.val()));
+  const list=document.getElementById('hist-list');
+  if(items.length===0){ list.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No activity yet</div></div>'; return; }
+  list.innerHTML=items.map(h=>{
+    const t=new Date(h.time);
+    const ts=t.toLocaleDateString('en-MY')+' '+t.toLocaleTimeString('en-MY',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="hist-item ${h.type}">
+      <div><div class="hist-track">${h.tracking}</div><div class="hist-loc">${h.location}</div><div style="font-size:9px;color:var(--muted);margin-top:2px">${TYPE_LBL[h.parcelType]||h.parcelType}</div></div>
+      <div style="text-align:right"><span class="hist-badge ${h.type==='inbound'?'badge-in':'badge-out'}">${h.type==='inbound'?'IN':'OUT'}</span><div class="hist-time">${ts}</div></div>
+    </div>`;
+  }).join('');
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────
+function applySettingsToUI() {
+  document.getElementById('set-fSlots').value=cfg.fSlots;
+  document.getElementById('set-fCap').value=cfg.fCap;
+  document.getElementById('set-bRacks').value=cfg.bRacks;
+  document.getElementById('set-bCap').value=cfg.bCap;
+}
+
+async function saveSettings() {
+  cfg={fSlots:parseInt(document.getElementById('set-fSlots').value)||32,fCap:parseInt(document.getElementById('set-fCap').value)||10,bRacks:parseInt(document.getElementById('set-bRacks').value)||5,bCap:parseInt(document.getElementById('set-bCap').value)||8};
+  await db.ref(`${R}/settings`).set(cfg);
+  showToast('Settings saved & synced to all devices ✓','success');
+}
+
+async function confirmReset() {
+  if(!confirm('Reset ALL parcel data? This cannot be undone.\n\nSettings will be kept.')) return;
+  await db.ref(R).update({parcels:null,zfSlots:null,zbShelves:null,history:null,stats:{total:0,pending:0,zfPending:0,zbPending:0}});
+  showToast('All data reset','info');
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg,type='info') {
+  clearTimeout(toastTimer);
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast show '+type;
+  toastTimer=setTimeout(()=>t.className='toast',2600);
+}
+
+// ── CAMERA ────────────────────────────────────────────────────────────────
+let camStreams = { inbound: null, outbound: null };
+let camTimers  = { inbound: null, outbound: null };
+
+function sfx(screen) { return screen === 'inbound' ? 'in' : 'out'; }
+
+async function toggleCamera(screen) {
+  if(camStreams[screen]) { stopCamera(screen); return; }
+
+  // Check HTTPS requirement
+  if(location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    showToast('Camera needs HTTPS. See note below.', 'error');
+    const s = sfx(screen);
+    document.getElementById(`cam-view-${s}`).className = 'cam-view show';
+    document.getElementById(`cam-view-${s}`).innerHTML =
+      `<div style="padding:20px;color:var(--accent4);font-size:14px;font-weight:700;line-height:1.7;text-align:center">
+        ⚠️ Camera requires HTTPS<br>
+        <span style="font-weight:500;font-size:13px">Open this file via a web server or GitHub Pages instead of directly from a file.<br><br>
+        Tip: Upload CollectCo.html to any free hosting like <b>tiiny.host</b> or access via your local network server.</span>
+        <br><br><button onclick="stopCamera('${screen}')" style="padding:10px 20px;border-radius:10px;border:none;background:var(--accent3);color:#fff;font-weight:700;cursor:pointer;font-size:14px">Close</button>
+      </div>`;
+    document.getElementById(`cam-btn-${s}`).classList.add('active');
+    document.getElementById(`cam-stop-${s}`).className = 'cam-stop-btn show';
+    return;
+  }
+
+  await startCamera(screen);
+}
+
+async function startCamera(screen) {
+  const s = sfx(screen);
+  const viewEl  = document.getElementById(`cam-view-${s}`);
+  const stopBtn = document.getElementById(`cam-stop-${s}`);
+  const camBtn  = document.getElementById(`cam-btn-${s}`);
+
+  // Build video element
+  viewEl.innerHTML = `
+    <video id="cam-video-${s}" autoplay playsinline muted style="width:100%;display:block;border-radius:14px;max-height:300px;object-fit:cover"></video>
+    <canvas id="cam-canvas-${s}" style="display:none"></canvas>
+    <div class="cam-overlay"><div class="cam-crosshair"></div></div>
+    <div class="cam-hint-overlay">Point camera at barcode</div>`;
+  viewEl.className  = 'cam-view show';
+  stopBtn.className = 'cam-stop-btn show';
+  camBtn.classList.add('active');
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    camStreams[screen] = stream;
+    const video = document.getElementById(`cam-video-${s}`);
+    video.srcObject = stream;
+    await video.play();
+    startDetection(screen);
+  } catch(e) {
+    stopCamera(screen);
+    if(e.name === 'NotAllowedError') {
+      showToast('Camera permission denied. Allow in browser settings.', 'error');
+    } else {
+      showToast('Camera error: ' + e.message, 'error');
+    }
+  }
+}
+
+function startDetection(screen) {
+  const s = sfx(screen);
+  const video  = document.getElementById(`cam-video-${s}`);
+  const canvas = document.getElementById(`cam-canvas-${s}`);
+
+  // Use BarcodeDetector if available (Chrome Android 83+)
+  if('BarcodeDetector' in window) {
+    const detector = new BarcodeDetector({ formats: ['code_128','code_39','ean_13','ean_8','qr_code','data_matrix','pdf417','aztec','itf','upc_a','upc_e'] });
+    let scanning = true;
+    async function detect() {
+      if(!scanning || !camStreams[screen]) return;
+      try {
+        if(video.readyState === video.HAVE_ENOUGH_DATA) {
+          const barcodes = await detector.detect(video);
+          if(barcodes.length > 0) {
+            scanning = false;
+            const code = barcodes[0].rawValue.trim().toUpperCase();
+            handleScannedCode(screen, code);
+            return;
+          }
+        }
+      } catch(e) {}
+      camTimers[screen] = setTimeout(detect, 200);
+    }
+    detect();
+  } else {
+    // Fallback: capture frames to canvas and use ZXing via a simple approach
+    showToast('BarcodeDetector not supported. Use manual entry.', 'error');
+    stopCamera(screen);
+  }
+}
+
+function handleScannedCode(screen, code) {
+  stopCamera(screen);
+  if(screen === 'inbound') {
+    showToast('Scanned: ' + code.slice(-8), 'success');
+    handleScan(code);
+  } else {
+    const last4 = code.replace(/[^A-Z0-9]/g,'').slice(-4);
+    showToast('Scanned — searching ' + last4, 'info');
+    document.getElementById('search-in').value = last4;
+    addToOutbound();
+  }
+}
+
+function stopCamera(screen) {
+  const s = sfx(screen);
+  clearTimeout(camTimers[screen]);
+  camTimers[screen] = null;
+
+  if(camStreams[screen]) {
+    camStreams[screen].getTracks().forEach(t => t.stop());
+    camStreams[screen] = null;
+  }
+
+  const viewEl  = document.getElementById(`cam-view-${s}`);
+  const stopBtn = document.getElementById(`cam-stop-${s}`);
+  const camBtn  = document.getElementById(`cam-btn-${s}`);
+  if(viewEl)  { viewEl.innerHTML = ''; viewEl.className = 'cam-view'; }
+  if(stopBtn) stopBtn.className = 'cam-stop-btn';
+  if(camBtn)  camBtn.classList.remove('active');
+}
+
+// ── THEME ─────────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light');
+  document.getElementById('theme-btn').textContent = isLight ? '🌑' : '🌙';
+  localStorage.setItem('collectco_theme', isLight ? 'light' : 'dark');
+}
+function applyTheme() {
+  const saved = localStorage.getItem('collectco_theme');
+  if(saved === 'light') {
+    document.body.classList.add('light');
+    document.getElementById('theme-btn').textContent = '🌑';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
