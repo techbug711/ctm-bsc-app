@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CollectCo WMS - Smart System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        .tab-active {
+            border-bottom: 4px solid #3b82f6;
+            color: #1d4ed8;
+            font-weight: bold;
+        }
+
+        .tag {
+            background: #eff6ff;
+            color: #1d4ed8;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tag span {
+            cursor: pointer;
+            color: #ef4444;
+        }
+
+        .platform-radio:checked+div {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 p-2 md:p-8 font-sans">
+
+    <div id="section-login" class="max-w-md mx-auto bg-white rounded-xl shadow-lg p-8 mt-10 text-center">
+        <h1 class="text-3xl font-black text-blue-700 mb-2">CollectCo WMS</h1>
+        <p class="text-gray-500 font-bold mb-8">Select your shift profile</p>
+
+        <div class="space-y-4">
+            <button onclick="loginWithPin('Paan', '1111')"
+                class="w-full bg-blue-100 text-blue-800 font-bold text-2xl py-6 rounded-lg hover:bg-blue-200 transition border-2 border-blue-200">
+                👨‍💻 Log in as Paan
+            </button>
+            <button onclick="loginWithPin('Ain', '2222')"
+                class="w-full bg-purple-100 text-purple-800 font-bold text-2xl py-6 rounded-lg hover:bg-purple-200 transition border-2 border-purple-200">
+                👩‍💻 Log in as Ain
+            </button>
+            <button onclick="loginWithPin('Zul', '3333')"
+                class="w-full bg-green-100 text-green-800 font-bold text-2xl py-6 rounded-lg hover:bg-green-200 transition border-2 border-green-200">
+                🧑‍💻 Log in as Zul
+            </button>
+            <button onclick="loginWithPin('Shaz', '4444')"
+                class="w-full bg-pink-100 text-pink-800 font-bold text-2xl py-6 rounded-lg hover:bg-pink-200 transition border-2 border-pink-200">
+                👩‍💻 Log in as Shaz
+            </button>
+            <button onclick="loginWithPin('Admin', '7890')"
+                class="w-full bg-gray-200 text-gray-800 font-bold text-xl py-4 rounded-lg hover:bg-gray-300 transition mt-4">
+                ⚙️ Admin Login
+            </button>
+        </div>
+    </div>
+
+    <div id="main-app" class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden hidden">
+
+        <div class="bg-gray-800 text-white p-4 flex justify-between items-center">
+            <p class="font-bold">Shift: <span id="currentUserDisplay" class="text-yellow-400 font-black">Admin</span>
+            </p>
+            <button onclick="logout()" class="text-sm bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded transition">Log
+                Out</button>
+        </div>
+
+        <div class="flex border-b border-gray-200 bg-white">
+            <button id="tab-inbound" class="flex-1 py-3 text-center tab-active text-sm md:text-lg transition"
+                onclick="switchTab('inbound')">
+                📥 IN
+            </button>
+            <button id="tab-outbound"
+                class="flex-1 py-3 text-center text-gray-500 text-sm md:text-lg hover:bg-gray-50 transition"
+                onclick="switchTab('outbound')">
+                📤 OUT
+            </button>
+            <button id="tab-inventory"
+                class="flex-1 py-3 text-center text-gray-500 text-sm md:text-lg hover:bg-gray-50 transition"
+                onclick="switchTab('inventory')">
+                📊 STOCK
+            </button>
+            <button id="tab-history"
+                class="flex-1 py-3 text-center text-gray-500 text-sm md:text-lg hover:bg-gray-50 transition"
+                onclick="switchTab('history')">
+                📜 HIST
+            </button>
+        </div>
+
+        <div id="section-inbound" class="p-4 md:p-8">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">Scan New Parcels</h2>
+
+            <div class="bg-blue-50 border-2 border-blue-200 p-4 rounded-lg mb-6 flex flex-wrap gap-4 items-end">
+                <div class="flex-1 min-w-[80px]">
+                    <label class="block text-gray-700 font-bold mb-2">Rack</label>
+                    <input type="text" id="rackPrefix" value="I"
+                        class="w-full p-2 text-2xl border border-gray-300 rounded uppercase text-center font-bold"
+                        maxlength="2">
+                </div>
+                <div class="flex-1 min-w-[80px]">
+                    <label class="block text-gray-700 font-bold mb-2">Level</label>
+                    <input type="number" id="levelCounter" value="1"
+                        class="w-full p-2 text-2xl border border-gray-300 rounded text-center font-bold">
+                </div>
+                <div class="flex-1 min-w-[80px]">
+                    <label class="block text-gray-700 font-bold mb-2">Slot</label>
+                    <input type="number" id="slotCounter" value="1"
+                        class="w-full p-2 text-2xl border border-gray-300 rounded text-center font-bold">
+                </div>
+                <div class="flex-1 min-w-[100px]">
+                    <label class="block text-gray-700 font-bold mb-2 text-blue-700">Max/Slot</label>
+                    <input type="number" id="slotCapacity" value="11"
+                        class="w-full p-2 text-2xl border-2 border-blue-300 rounded text-center font-bold text-blue-700">
+                </div>
+            </div>
+
+            <div class="text-center mb-6 border-b pb-6">
+                <p class="text-gray-500 font-bold text-lg">Next scanned parcel goes to:</p>
+                <p id="targetLocationDisplay" class="text-6xl md:text-7xl font-black text-blue-700 my-2">I-1-1</p>
+                <p id="capacityDisplay" class="text-2xl font-bold text-gray-500">Checking shelf...</p>
+            </div>
+
+            <div id="inboundStatus" class="mb-6 transition-all hidden"></div>
+
+            <div id="reader"
+                class="w-full max-w-md mx-auto hidden mb-4 rounded-lg overflow-hidden border-4 border-blue-300 bg-black">
+            </div>
+            <button type="button" id="startCameraBtn"
+                class="w-full mb-6 bg-gray-200 text-gray-700 font-bold py-4 rounded-lg hover:bg-gray-300 transition flex items-center justify-center gap-2 text-xl">
+                📷 Start Continuous Scanner
+            </button>
+
+            <form id="inboundForm" class="space-y-6">
+                <div>
+                    <input type="text" id="awbInput" placeholder="Scan Barcode Here (AWB)" autocomplete="off"
+                        class="w-full p-6 text-2xl md:text-3xl border-4 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 uppercase shadow-inner text-center font-bold"
+                        required autofocus>
+                </div>
+                <button type="submit" class="hidden">Save</button>
+            </form>
+
+        </div>
+
+        <div id="section-outbound" class="p-4 md:p-8 hidden">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">Retrieve Parcels</h2>
+
+            <p class="text-gray-500 font-bold mb-2 uppercase tracking-wide">Enter 4+ digits, or paste full AWB:</p>
+            <input type="text" id="searchInput" placeholder="Type here & press Enter..."
+                class="w-full p-6 text-2xl md:text-3xl border-4 border-blue-300 rounded-lg focus:outline-none focus:border-blue-600 uppercase font-bold text-center shadow-inner transition-all"
+                autocomplete="off">
+
+            <div class="flex flex-wrap gap-2 mt-4" id="tagArea"></div>
+
+            <button id="searchDbBtn"
+                class="mt-6 w-full bg-green-600 text-white font-bold py-4 text-xl rounded-lg hover:bg-green-700 transition hidden shadow-lg">
+                Refresh Search
+            </button>
+
+            <button id="collectAllBtn"
+                class="mt-8 w-full bg-blue-800 text-white font-bold py-4 text-2xl rounded-lg hover:bg-blue-900 transition hidden shadow-xl border-4 border-blue-900">
+                📦 COLLECT ALL DISPLAYED
+            </button>
+
+            <div id="resultsArea" class="mt-4 space-y-4"></div>
+        </div>
+
+        <div id="section-inventory" class="p-4 md:p-8 hidden">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">Inventory Dashboard</h2>
+
+            <div class="bg-purple-50 p-6 rounded-xl border-2 border-purple-200 mb-6 shadow-sm">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+                    <p id="totalInventoryCount" class="text-4xl font-black text-purple-800">Total: 0</p>
+                    <button id="loadInventoryBtn"
+                        class="bg-purple-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-purple-700 transition shadow-md w-full md:w-auto">
+                        🔄 Refresh Data
+                    </button>
+                </div>
+
+                <div id="inventorySummary" class="mb-4"></div>
+
+                <div class="flex gap-2 mb-4">
+                    <button id="filterBtn-ALL" onclick="setInventoryFilter('ALL')"
+                        class="flex-1 py-3 font-bold rounded-lg border-2 border-purple-600 bg-purple-600 text-white transition shadow-md text-sm md:text-base">ALL</button>
+                    <button id="filterBtn-SPX" onclick="setInventoryFilter('SPX')"
+                        class="flex-1 py-3 font-bold rounded-lg border-2 border-purple-300 text-purple-700 hover:bg-purple-100 transition text-sm md:text-base">🟠
+                        SPX</button>
+                    <button id="filterBtn-YOYI" onclick="setInventoryFilter('YOYI')"
+                        class="flex-1 py-3 font-bold rounded-lg border-2 border-purple-300 text-purple-700 hover:bg-purple-100 transition text-sm md:text-base">🟢
+                        YOYI</button>
+                </div>
+
+                <input type="text" id="inventorySearchInput" autocomplete="off"
+                    placeholder="🔍 Search Location (e.g., I-1-2) or Tracking..."
+                    class="w-full p-4 border-2 border-purple-300 rounded-lg text-lg uppercase font-bold focus:border-purple-600 focus:outline-none shadow-inner"
+                    oninput="filterInventory()">
+            </div>
+
+            <div id="inventoryList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <p class="text-gray-500 italic col-span-full">Click Refresh to load inventory.</p>
+            </div>
+        </div>
+
+        <div id="section-history" class="p-4 md:p-8 hidden">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">Recent Collections (History)</h2>
+
+            <div class="bg-gray-50 p-6 rounded-xl border-2 border-gray-200 mb-6 shadow-sm">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+                    <p class="text-gray-500 font-bold">Showing last 50 collected parcels</p>
+                    <button onclick="loadHistory()"
+                        class="bg-gray-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-gray-700 transition shadow-md w-full md:w-auto">
+                        🔄 Refresh History
+                    </button>
+                </div>
+
+                <input type="text" id="historySearchInput" autocomplete="off"
+                    placeholder="🔍 Search History by Tracking..."
+                    class="w-full p-4 border-2 border-gray-300 rounded-lg text-lg uppercase font-bold focus:border-gray-500 focus:outline-none shadow-inner"
+                    oninput="filterHistory()">
+            </div>
+
+            <div id="historyList" class="space-y-4">
+                <p class="text-gray-500 italic text-center">Click Refresh to load history.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 1. FIREBASE CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAS52-pEsaz2jLgtNhV3R9w5rBt0iW72EM",
+            authDomain: "ctm-bsc-98545.firebaseapp.com",
+            projectId: "ctm-bsc-98545",
+            storageBucket: "ctm-bsc-98545.firebasestorage.app",
+            messagingSenderId: "386151094372",
+            appId: "1:386151094372:web:a46f10a1fc8383af412771",
+            measurementId: "G-2G2EFE9EF9"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let currentUser = null;
+        let isCameraActive = false;
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+        let allInventoryData = [];
+        let currentInventoryFilter = 'ALL';
+        let allHistoryData = [];
+
+        // --- 2. SHIFT LOGIN LOGIC ---
+        function loginWithPin(name, correctPin) {
+            const enteredPin = prompt(`Enter PIN for ${name}:`);
+            if (enteredPin === correctPin) {
+                currentUser = name;
+                document.getElementById('currentUserDisplay').textContent = name;
+                document.getElementById('section-login').classList.add('hidden');
+                document.getElementById('main-app').classList.remove('hidden');
+                refreshSlotData();
+                if (!isTouchDevice) document.getElementById('awbInput').focus();
+            } else if (enteredPin !== null) {
+                alert("Incorrect PIN.");
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('main-app').classList.add('hidden');
+            document.getElementById('section-login').classList.remove('hidden');
+            clearSearch();
+            document.getElementById('inboundStatus').classList.add('hidden');
+            if (isCameraActive && html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    isCameraActive = false;
+                    document.getElementById('reader').classList.add('hidden');
+                    document.getElementById('startCameraBtn').innerHTML = '📷 Start Continuous Scanner';
+                    document.getElementById('startCameraBtn').classList.replace('bg-red-100', 'bg-gray-200');
+                    document.getElementById('startCameraBtn').classList.replace('text-red-700', 'text-gray-700');
+                });
+            }
+        }
+
+        // --- 3. ADVANCED AUDIO ENGINE ---
+        function playSuccessBeep() {
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.play().catch(e => console.log(e));
+        }
+
+        function playDuplicateBuzzer() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(1.0, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.6);
+            } catch (e) { console.log(e); }
+        }
+
+        function playInvalidBuzzer() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(200, audioCtx.currentTime + 0.2);
+                gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.4);
+            } catch (e) { console.log(e); }
+        }
+
+        function playSlotFullChime() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                function playNote(freq, startTime) {
+                    const osc = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(freq, startTime);
+                    gainNode.gain.setValueAtTime(1.0, startTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+                    osc.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    osc.start(startTime);
+                    osc.stop(startTime + 0.3);
+                }
+                const now = audioCtx.currentTime;
+                playNote(880.00, now);
+                playNote(1108.73, now + 0.15);
+                playNote(1318.51, now + 0.30);
+            } catch (e) { console.log(e); }
+        }
+
+        // --- 4. TAB SWITCHING LOGIC ---
+        function switchTab(tab) {
+            const tabs = ['inbound', 'outbound', 'inventory', 'history'];
+            tabs.forEach(t => {
+                document.getElementById(`section-${t}`).classList.toggle('hidden', tab !== t);
+                const btn = document.getElementById(`tab-${t}`);
+                if (tab === t) {
+                    btn.className = 'flex-1 py-3 text-center tab-active text-sm md:text-lg transition';
+                } else {
+                    btn.className = 'flex-1 py-3 text-center text-gray-500 text-sm md:text-lg hover:bg-gray-50 transition';
+                }
+            });
+
+            if (!isTouchDevice) {
+                if (tab === 'inbound') document.getElementById('awbInput').focus();
+                if (tab === 'outbound') document.getElementById('searchInput').focus();
+            }
+            if (tab === 'inventory') {
+                document.getElementById('inventorySearchInput').value = '';
+                loadInventory();
+            }
+            if (tab === 'history') {
+                document.getElementById('historySearchInput').value = '';
+                loadHistory();
+            }
+        }
+
+        // --- 5. INVENTORY DASHBOARD LOGIC ---
+        function setInventoryFilter(platform) {
+            currentInventoryFilter = platform;
+            const platforms = ['ALL', 'SPX', 'YOYI'];
+            platforms.forEach(p => {
+                const btn = document.getElementById(`filterBtn-${p}`);
+                if (p === platform) {
+                    btn.className = 'flex-1 py-3 font-bold rounded-lg border-2 border-purple-600 bg-purple-600 text-white transition shadow-md text-sm md:text-base';
+                } else {
+                    btn.className = 'flex-1 py-3 font-bold rounded-lg border-2 border-purple-300 text-purple-700 hover:bg-purple-100 transition text-sm md:text-base';
+                }
+            });
+            filterInventory();
+        }
+
+        async function loadInventory() {
+            const listDiv = document.getElementById('inventoryList');
+            const countDisplay = document.getElementById('totalInventoryCount');
+            const summaryDiv = document.getElementById('inventorySummary');
+
+            listDiv.innerHTML = '<p class="text-gray-500 font-bold text-xl col-span-full text-center py-8">Fetching inventory from shelves...</p>';
+
+            try {
+                const snapshot = await db.collection("active_parcels").get();
+
+                if (snapshot.empty) {
+                    countDisplay.textContent = `Total: 0`;
+                    summaryDiv.innerHTML = '';
+                    listDiv.innerHTML = '<p class="text-green-600 text-2xl font-bold text-center col-span-full py-8">All shelves are empty! 🎉</p>';
+                    allInventoryData = [];
+                    return;
+                }
+
+                let parcels = [];
+                let spxCount = 0;
+                let yoyiCount = 0;
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    parcels.push(data);
+                    if (data.full_awb.startsWith('680')) yoyiCount++;
+                    else spxCount++;
+                });
+
+                parcels.sort((a, b) => a.location.localeCompare(b.location, undefined, { numeric: true, sensitivity: 'base' }));
+                allInventoryData = parcels;
+
+                countDisplay.textContent = `Total: ${parcels.length}`;
+                summaryDiv.innerHTML = `
+                    <div class="flex gap-2 mb-2">
+                        <div class="bg-orange-100 text-orange-800 px-2 py-2 rounded-lg font-black text-lg md:text-xl border-2 border-orange-200 shadow-sm flex-1 text-center">🟠 SPX: ${spxCount}</div>
+                        <div class="bg-green-100 text-green-800 px-2 py-2 rounded-lg font-black text-lg md:text-xl border-2 border-green-200 shadow-sm flex-1 text-center">🟢 YOYI: ${yoyiCount}</div>
+                    </div>
+                `;
+
+                setInventoryFilter('ALL');
+            } catch (error) {
+                listDiv.innerHTML = `<p class="text-red-500 text-center font-bold col-span-full">Error loading database: ${error.message}</p>`;
+            }
+        }
+
+        function filterInventory() {
+            const query = document.getElementById('inventorySearchInput').value.toUpperCase();
+            const filtered = allInventoryData.filter(p => {
+                const matchesText = p.full_awb.includes(query) || p.location.includes(query);
+                let matchesPlatform = true;
+                const isYoyi = p.full_awb.startsWith('680');
+                if (currentInventoryFilter === 'SPX' && isYoyi) matchesPlatform = false;
+                if (currentInventoryFilter === 'YOYI' && !isYoyi) matchesPlatform = false;
+                return matchesText && matchesPlatform;
+            });
+            renderInventoryList(filtered);
+        }
+
+        function renderInventoryList(parcels) {
+            const listDiv = document.getElementById('inventoryList');
+            let html = '';
+
+            parcels.forEach(p => {
+                const scannerName = p.scannedBy ? p.scannedBy : 'Unknown';
+                const timeString = new Date(p.timestamp).toLocaleString('en-MY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                const isYoyi = p.full_awb.startsWith('680');
+                const platformBadge = isYoyi ? '<span class="bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
+
+                let deleteBtn = '';
+                if (currentUser === 'Admin') {
+                    deleteBtn = `<button onclick="adminDeleteParcel('${p.full_awb}')" class="mt-4 text-sm bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 font-bold px-4 py-2 rounded border border-red-300 transition w-full shadow-sm">🗑️ Admin Delete</button>`;
+                }
+
+                html += `
+                    <div class="bg-white border-2 border-gray-200 p-4 rounded-lg shadow-sm flex flex-col justify-between">
+                        <div class="flex justify-between items-start">
+                            <div class="overflow-hidden">
+                                <p class="text-3xl font-black text-purple-700">${p.location}</p>
+                                <p class="text-sm text-gray-800 font-bold uppercase tracking-wider mt-1 break-words">${p.full_awb}${platformBadge}</p>
+                            </div>
+                            <div class="text-right text-xs text-gray-500 min-w-[80px]">
+                                <p class="font-bold text-gray-700">In: ${scannerName}</p>
+                                <p>${timeString}</p>
+                            </div>
+                        </div>
+                        ${deleteBtn}
+                    </div>
+                `;
+            });
+
+            if (parcels.length === 0) html = '<p class="text-gray-500 font-bold text-xl col-span-full text-center py-8">No matching parcels found.</p>';
+            listDiv.innerHTML = html;
+        }
+
+        async function adminDeleteParcel(awb) {
+            if (currentUser !== 'Admin') {
+                alert("Security block: Only Admins can delete items directly from the dashboard.");
+                return;
+            }
+            if (confirm(`⚠️ WARNING: Move AWB ${awb} to the History trash?`)) {
+                try {
+                    const docRef = db.collection("active_parcels").doc(awb);
+                    const snap = await docRef.get();
+                    if (snap.exists) {
+                        const data = snap.data();
+                        data.collectedAt = Date.now();
+                        data.collectedBy = "Admin (Deleted)";
+
+                        const batch = db.batch();
+                        batch.set(db.collection("collected_parcels").doc(awb), data);
+                        batch.delete(docRef);
+                        await batch.commit();
+                    }
+                    alert(`✅ AWB ${awb} moved to History.`);
+                    document.getElementById('inventorySearchInput').value = '';
+                    loadInventory();
+                } catch (error) {
+                    alert("Error deleting parcel: " + error.message);
+                }
+            }
+        }
+
+        // --- 6. HISTORY LOGIC ---
+        async function loadHistory() {
+            const listDiv = document.getElementById('historyList');
+            listDiv.innerHTML = '<p class="text-center font-bold text-gray-500 py-8">Loading history...</p>';
+            try {
+                const snapshot = await db.collection("collected_parcels")
+                    .orderBy("collectedAt", "desc")
+                    .limit(50)
+                    .get();
+
+                if (snapshot.empty) {
+                    listDiv.innerHTML = '<p class="text-center font-bold text-gray-500 py-8">No recent history found.</p>';
+                    allHistoryData = [];
+                    return;
+                }
+
+                let parcels = [];
+                snapshot.forEach(doc => parcels.push(doc.data()));
+                allHistoryData = parcels;
+
+                renderHistoryList(parcels);
+            } catch (e) {
+                listDiv.innerHTML = `<p class="text-red-500 text-center font-bold">Error: ${e.message}</p>`;
+            }
+        }
+
+        function filterHistory() {
+            const query = document.getElementById('historySearchInput').value.toUpperCase();
+            const filtered = allHistoryData.filter(p => p.full_awb.includes(query));
+            renderHistoryList(filtered);
+        }
+
+        function renderHistoryList(parcels) {
+            const listDiv = document.getElementById('historyList');
+            let html = '';
+
+            parcels.forEach(p => {
+                const timeString = new Date(p.collectedAt).toLocaleString('en-MY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                html += `
+                <div class="bg-white border-2 border-gray-200 p-4 rounded-lg shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4" id="hist-${p.full_awb}">
+                    <div>
+                        <p class="text-xl font-bold text-gray-800 break-all">${p.full_awb}</p>
+                        <p class="text-sm text-gray-500 mt-1">From Rack: <span class="font-bold text-purple-700 text-lg">${p.location}</span></p>
+                        <p class="text-xs text-gray-400 mt-1">Collected By: <span class="font-bold text-gray-600">${p.collectedBy}</span> at ${timeString}</p>
+                    </div>
+                    <button onclick="undoCollect('${p.full_awb}')" class="bg-yellow-500 text-white font-bold px-6 py-3 rounded-lg hover:bg-yellow-600 transition shadow-sm w-full md:w-auto flex-shrink-0">
+                        ↩️ Undo
+                    </button>
+                </div>
+                `;
+            });
+
+            if (parcels.length === 0) html = '<p class="text-center font-bold text-gray-500 py-8">No matching history found.</p>';
+            listDiv.innerHTML = html;
+        }
+
+        async function undoCollect(awbId) {
+            if (!confirm(`Return parcel ${awbId} back to the active shelves?`)) return;
+            try {
+                const docRef = db.collection("collected_parcels").doc(awbId);
+                const docSnap = await docRef.get();
+                if (docSnap.exists) {
+                    const data = docSnap.data();
+                    delete data.collectedAt;
+                    delete data.collectedBy;
+
+                    const batch = db.batch();
+                    batch.set(db.collection("active_parcels").doc(awbId), data);
+                    batch.delete(docRef);
+                    await batch.commit();
+
+                    const card = document.getElementById(`hist-${awbId}`);
+                    if (card) card.remove();
+                    alert("✅ Parcel safely restored to Active Inventory!");
+                } else {
+                    alert("Error: Parcel data not found in history.");
+                }
+            } catch (e) {
+                alert("Error restoring parcel: " + e.message);
+            }
+        }
+
+        // --- 7. INBOUND LOGIC ---
+        const rackPrefix = document.getElementById('rackPrefix');
+        const levelCounter = document.getElementById('levelCounter');
+        const slotCounter = document.getElementById('slotCounter');
+        const slotCapacity = document.getElementById('slotCapacity');
+        const targetLocationDisplay = document.getElementById('targetLocationDisplay');
+        const capacityDisplay = document.getElementById('capacityDisplay');
+        let currentItemsInSlot = 0;
+
+        if (localStorage.getItem('wms_rack')) rackPrefix.value = localStorage.getItem('wms_rack');
+        if (localStorage.getItem('wms_level')) levelCounter.value = localStorage.getItem('wms_level');
+        if (localStorage.getItem('wms_slot')) slotCounter.value = localStorage.getItem('wms_slot');
+        if (localStorage.getItem('wms_capacity')) slotCapacity.value = localStorage.getItem('wms_capacity');
+
+        function getAssignedLocation() {
+            return `${rackPrefix.value.toUpperCase()}-${levelCounter.value}-${slotCounter.value}`;
+        }
+
+        function applySmartDefaults() {
+            const r = rackPrefix.value.toUpperCase();
+            const l = parseInt(levelCounter.value);
+            const s = parseInt(slotCounter.value);
+
+            if (r === 'H' && l === 2 && s >= 1 && s <= 12) {
+                slotCapacity.value = 15;
+            } else if (r === 'H' && (l === 0 || l === 1) && (s === 1 || s === 2)) {
+                slotCapacity.value = 30;
+            }
+        }
+
+        async function refreshSlotData() {
+            localStorage.setItem('wms_rack', rackPrefix.value.toUpperCase());
+            localStorage.setItem('wms_level', levelCounter.value);
+            localStorage.setItem('wms_slot', slotCounter.value);
+            localStorage.setItem('wms_capacity', slotCapacity.value);
+
+            const assignedLocation = getAssignedLocation();
+            targetLocationDisplay.textContent = assignedLocation;
+            capacityDisplay.textContent = "Checking shelf data...";
+
+            try {
+                const snapshot = await db.collection("active_parcels").where("location", "==", assignedLocation).get();
+                currentItemsInSlot = snapshot.size;
+                if (currentItemsInSlot >= parseInt(slotCapacity.value)) {
+                    capacityDisplay.innerHTML = `<span class="text-red-600 font-black">SLOT FULL (${currentItemsInSlot}/${slotCapacity.value})</span> - Jumping to next...`;
+                    setTimeout(() => {
+                        slotCounter.value = parseInt(slotCounter.value) + 1;
+                        applySmartDefaults();
+                        refreshSlotData();
+                    }, 1500);
+                } else {
+                    capacityDisplay.textContent = `Item ${currentItemsInSlot} of ${slotCapacity.value} currently in slot`;
+                }
+            } catch (error) {
+                capacityDisplay.textContent = "Database connection error.";
+            }
+        }
+
+        rackPrefix.addEventListener('input', () => { applySmartDefaults(); refreshSlotData(); });
+        levelCounter.addEventListener('change', () => { applySmartDefaults(); refreshSlotData(); });
+        slotCounter.addEventListener('change', () => { applySmartDefaults(); refreshSlotData(); });
+        slotCapacity.addEventListener('change', refreshSlotData);
+
+        function manageFocusState(inputElement) {
+            if (isCameraActive) {
+                inputElement.blur();
+            } else if (!isTouchDevice) {
+                inputElement.focus();
+            }
+        }
+
+        document.getElementById('inboundForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const awbInput = document.getElementById('awbInput');
+            const awb = awbInput.value.trim().toUpperCase();
+            const statusDiv = document.getElementById('inboundStatus');
+
+            let isValidFormat = false;
+            let invalidReason = "";
+
+            let cleanAwb = awb;
+            if (awb.startsWith("MY") && /[A-Z]$/.test(awb)) {
+                cleanAwb = awb.slice(0, -1);
+            }
+
+            let extractedLast4 = cleanAwb.slice(-4);
+            let extractedLast5 = cleanAwb.slice(-5);
+            let extractedLast6 = cleanAwb.slice(-6);
+
+            if (awb.startsWith("680")) {
+                if (/^680\d{12}$/.test(awb)) {
+                    isValidFormat = true;
+                } else {
+                    invalidReason = "YOYI tracking must be exactly 15 digits.";
+                }
+            } else if (awb.startsWith("SPXMY")) {
+                if (/^SPXMY\d{12}$/.test(awb)) {
+                    isValidFormat = true;
+                } else {
+                    invalidReason = "SPXMY tracking must be exactly 17 chars.";
+                }
+            } else if (awb.startsWith("MY")) {
+                if (/^MY\d{12,15}[A-Z]?$/.test(awb)) {
+                    isValidFormat = true;
+                } else {
+                    invalidReason = "Invalid MY tracking format.";
+                }
+            } else {
+                invalidReason = "Must start with 680, SPXMY, or MY.";
+            }
+
+            if (!isValidFormat) {
+                playInvalidBuzzer();
+                statusDiv.innerHTML = `⚠️ Invalid Barcode!<br><span class="text-xl">"${awb}"<br>${invalidReason}</span>`;
+                statusDiv.className = "mb-6 p-4 bg-orange-100 border-4 border-orange-500 text-2xl font-black text-center text-orange-800 rounded-lg block shadow-lg";
+                awbInput.value = '';
+                manageFocusState(awbInput);
+                return;
+            }
+
+            const assignedLocation = getAssignedLocation();
+
+            try {
+                const docRef = db.collection("active_parcels").doc(awb);
+                const docSnap = await docRef.get();
+
+                if (docSnap.exists) {
+                    playDuplicateBuzzer();
+                    const existingLocation = docSnap.data().location;
+                    statusDiv.innerHTML = `🚨 DUPLICATE SCAN! 🚨<br><span class="text-2xl">Already saved to ${existingLocation}</span><br><span class="text-lg mt-2 inline-block">AWB: ${awb}</span>`;
+                    statusDiv.className = "mb-6 p-4 bg-red-100 border-4 border-red-600 text-3xl font-black text-center text-red-700 rounded-lg block shadow-lg";
+                    awbInput.value = '';
+                    manageFocusState(awbInput);
+                    return;
+                }
+
+                await docRef.set({
+                    full_awb: awb,
+                    last4: extractedLast4,
+                    last5: extractedLast5,
+                    last6: extractedLast6,
+                    location: assignedLocation,
+                    timestamp: Date.now(),
+                    scannedBy: currentUser
+                });
+
+                statusDiv.innerHTML = `✅ Saved to <span class="text-4xl">${assignedLocation}</span><br><span class="text-xl text-green-800 block mt-2 tracking-wider">AWB: ${awb}</span>`;
+                statusDiv.className = "mb-6 p-4 bg-green-100 border-4 border-green-500 text-3xl font-black text-center text-green-700 rounded-lg block shadow-lg";
+                awbInput.value = '';
+
+                currentItemsInSlot++;
+
+                if (currentItemsInSlot >= parseInt(slotCapacity.value)) {
+                    playSlotFullChime();
+                    slotCounter.value = parseInt(slotCounter.value) + 1;
+                    applySmartDefaults();
+                    refreshSlotData();
+                } else {
+                    playSuccessBeep();
+                    capacityDisplay.textContent = `Item ${currentItemsInSlot} of ${slotCapacity.value} currently in slot`;
+                }
+
+                manageFocusState(awbInput);
+            } catch (error) {
+                playDuplicateBuzzer();
+                statusDiv.textContent = `❌ Error saving: ${error.message}`;
+                statusDiv.className = "mb-6 p-4 bg-red-100 border-4 border-red-600 text-2xl font-black text-center text-red-700 rounded-lg block shadow-lg";
+                manageFocusState(awbInput);
+            }
+        });
+
+        // --- 8. CAMERA SCANNER LOGIC ---
+        const startCameraBtn = document.getElementById('startCameraBtn');
+        const readerDiv = document.getElementById('reader');
+        const inboundForm = document.getElementById('inboundForm');
+        let html5QrCode;
+        let isCameraCooldown = false;
+
+        startCameraBtn.addEventListener('click', () => {
+            if (isCameraActive && html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    isCameraActive = false;
+                    readerDiv.classList.add('hidden');
+                    startCameraBtn.innerHTML = '📷 Start Continuous Scanner';
+                    startCameraBtn.classList.replace('bg-red-100', 'bg-gray-200');
+                    startCameraBtn.classList.replace('text-red-700', 'text-gray-700');
+                });
+                return;
+            }
+
+            readerDiv.classList.remove('hidden');
+            startCameraBtn.innerHTML = '🛑 Stop Scanner';
+            startCameraBtn.classList.replace('bg-gray-200', 'bg-red-100');
+            startCameraBtn.classList.replace('text-gray-700', 'text-red-700');
+
+            html5QrCode = new Html5Qrcode("reader");
+            isCameraActive = true;
+
+            const config = { fps: 10, qrbox: { width: 300, height: 300 } };
+
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                (decodedText) => {
+                    if (isCameraCooldown) return;
+                    isCameraCooldown = true;
+
+                    document.getElementById('awbInput').value = decodedText;
+                    inboundForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+                    startCameraBtn.innerHTML = '⏳ Saving... Next scan in 2s';
+                    setTimeout(() => {
+                        isCameraCooldown = false;
+                        if (isCameraActive) startCameraBtn.innerHTML = '🛑 Stop Scanner';
+                    }, 2000);
+                },
+                (errorMessage) => { }
+            ).catch((err) => {
+                isCameraActive = false;
+                alert("Camera access denied. Please check permissions.");
+            });
+        });
+
+        // --- 9. OUTBOUND LOGIC (WITH BOLD HIGHLIGHTING) ---
+        const searchInput = document.getElementById('searchInput');
+        const tagArea = document.getElementById('tagArea');
+        const searchDbBtn = document.getElementById('searchDbBtn');
+        const resultsArea = document.getElementById('resultsArea');
+        const collectAllBtn = document.getElementById('collectAllBtn');
+        let searchQueries = [];
+        let currentDisplayedIds = [];
+        let currentDisplayedData = {};
+
+        function clearSearch() {
+            searchQueries = [];
+            currentDisplayedIds = [];
+            currentDisplayedData = {};
+            tagArea.innerHTML = '';
+            resultsArea.innerHTML = '';
+            searchDbBtn.classList.add('hidden');
+            collectAllBtn.classList.add('hidden');
+            searchInput.value = '';
+            searchInput.focus();
+        }
+
+        searchInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const value = e.target.value.toUpperCase().trim();
+
+                if (value.length < 4) {
+                    alert("Please enter at least 4 digits/characters.");
+                    return;
+                }
+
+                if (!searchQueries.includes(value)) {
+                    searchQueries.push(value);
+                    const tag = document.createElement('div');
+                    tag.className = 'tag text-2xl';
+                    tag.innerHTML = `${value} <span onclick="removeTag(this, '${value}')" class="ml-2">✖</span>`;
+                    tagArea.appendChild(tag);
+                }
+
+                searchInput.value = '';
+                searchDbBtn.classList.remove('hidden');
+                searchDbBtn.click();
+            }
+        });
+
+        function removeTag(element, value) {
+            element.parentElement.remove();
+            searchQueries = searchQueries.filter(q => q !== value);
+            if (searchQueries.length === 0) {
+                searchDbBtn.classList.add('hidden');
+                collectAllBtn.classList.add('hidden');
+                resultsArea.innerHTML = '';
+            } else {
+                searchDbBtn.click();
+            }
+        }
+
+        searchDbBtn.addEventListener('click', async () => {
+            if (searchQueries.length === 0) return;
+            resultsArea.innerHTML = '<p class="text-gray-500 font-bold text-xl text-center">Searching shelves...</p>';
+            collectAllBtn.classList.add('hidden');
+            currentDisplayedIds = [];
+            currentDisplayedData = {};
+
+            try {
+                const snapshot = await db.collection("active_parcels").get();
+                let resultsHTML = '';
+                let matchCount = 0;
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const awb = data.full_awb.toUpperCase();
+                    const cleanAwb = awb.replace(/[A-Z]$/, '');
+
+                    let matchedQuery = null;
+                    const isMatch = searchQueries.some(q => {
+                        if (awb.endsWith(q) || cleanAwb.endsWith(q) || awb === q) {
+                            matchedQuery = q;
+                            return true;
+                        }
+                        return false;
+                    });
+
+                    if (isMatch) {
+                        matchCount++;
+                        currentDisplayedIds.push(doc.id);
+                        currentDisplayedData[doc.id] = data;
+
+                        const isYoyi = awb.startsWith('680');
+                        const platformBadge = isYoyi ? '<span class="bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
+
+                        // Calculate dynamic highlighting
+                        let displayAwb = awb;
+                        if (matchedQuery) {
+                            let lastIdx = awb.lastIndexOf(matchedQuery);
+                            if (lastIdx !== -1) {
+                                displayAwb = awb.substring(0, lastIdx) +
+                                    `<span class="text-black font-black text-lg bg-yellow-200 px-1 rounded shadow-sm border border-yellow-400">` +
+                                    awb.substring(lastIdx, lastIdx + matchedQuery.length) +
+                                    `</span>` +
+                                    awb.substring(lastIdx + matchedQuery.length);
+                            }
+                        }
+
+                        resultsHTML += `
+                            <div class="bg-gray-50 border-2 border-gray-300 p-6 rounded-lg flex justify-between items-center" id="card-${doc.id}">
+                                <div>
+                                    <p class="text-sm text-gray-500 font-bold uppercase tracking-wider">Tracking: ${displayAwb}${platformBadge}</p>
+                                    <p class="text-3xl md:text-4xl font-black text-blue-700 mt-2">${data.location}</p>
+                                </div>
+                                <button onclick="markCollected('${doc.id}')" class="bg-blue-600 text-white px-6 md:px-8 py-4 rounded-lg text-xl md:text-2xl font-bold hover:bg-blue-700 shadow-md transition">
+                                    Collect
+                                </button>
+                            </div>
+                        `;
+                    }
+                });
+
+                if (matchCount === 0) {
+                    resultsArea.innerHTML = '<p class="text-red-500 text-xl font-bold text-center">No active parcels found matching those digits.</p>';
+                    return;
+                }
+
+                resultsArea.innerHTML = resultsHTML;
+                if (currentDisplayedIds.length > 1) {
+                    collectAllBtn.classList.remove('hidden');
+                }
+            } catch (error) {
+                resultsArea.innerHTML = `<p class="text-red-500 text-center font-bold">Error: ${error.message}</p>`;
+            }
+        });
+
+        async function markCollected(awbId) {
+            try {
+                const data = currentDisplayedData[awbId];
+                if (data) {
+                    data.collectedAt = Date.now();
+                    data.collectedBy = currentUser || 'Admin';
+
+                    const batch = db.batch();
+                    batch.set(db.collection("collected_parcels").doc(awbId), data);
+                    batch.delete(db.collection("active_parcels").doc(awbId));
+                    await batch.commit();
+                } else {
+                    await db.collection("active_parcels").doc(awbId).delete();
+                }
+
+                document.getElementById(`card-${awbId}`).remove();
+                currentDisplayedIds = currentDisplayedIds.filter(id => id !== awbId);
+
+                if (currentDisplayedIds.length <= 1) collectAllBtn.classList.add('hidden');
+                if (resultsArea.children.length === 0) {
+                    resultsArea.innerHTML = '<p class="text-green-600 text-2xl font-bold text-center mt-8">✅ All parcels collected.</p>';
+                    setTimeout(clearSearch, 1500);
+                }
+            } catch (error) {
+                alert("Error updating database.");
+            }
+        }
+
+        collectAllBtn.addEventListener('click', async () => {
+            collectAllBtn.innerHTML = "⏳ Processing...";
+            try {
+                const batch = db.batch();
+                currentDisplayedIds.forEach(id => {
+                    const data = currentDisplayedData[id];
+                    if (data) {
+                        data.collectedAt = Date.now();
+                        data.collectedBy = currentUser || 'Admin';
+                        batch.set(db.collection("collected_parcels").doc(id), data);
+                    }
+                    batch.delete(db.collection("active_parcels").doc(id));
+                });
+                await batch.commit();
+
+                resultsArea.innerHTML = '<p class="text-green-600 text-2xl font-bold text-center mt-8">✅ All parcels collected.</p>';
+                collectAllBtn.classList.add('hidden');
+                collectAllBtn.innerHTML = "📦 COLLECT ALL DISPLAYED";
+                setTimeout(clearSearch, 1500);
+            } catch (error) {
+                alert("Error collecting all: " + error.message);
+                collectAllBtn.innerHTML = "📦 COLLECT ALL DISPLAYED";
+            }
+        });
+    </script>
+</body>
+
+</html>
