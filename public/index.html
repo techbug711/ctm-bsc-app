@@ -228,7 +228,7 @@
                 </div>
 
                 <input type="text" id="historySearchInput" autocomplete="off"
-                    placeholder="🔍 Search History by Tracking..."
+                    placeholder="🔍 Search History by Tracking or Name..."
                     class="w-full p-4 border-2 border-gray-300 rounded-lg text-lg uppercase font-bold focus:border-gray-500 focus:outline-none shadow-inner"
                     oninput="filterHistory()">
             </div>
@@ -557,7 +557,12 @@
 
         function filterHistory() {
             const query = document.getElementById('historySearchInput').value.toUpperCase();
-            const filtered = allHistoryData.filter(p => p.full_awb.includes(query));
+            const filtered = allHistoryData.filter(p => {
+                // Ensure name exists before trying to convert to uppercase
+                const nameStr = p.customerName ? p.customerName.toUpperCase() : '';
+                // Return true if the query matches the AWB OR the Name
+                return p.full_awb.includes(query) || nameStr.includes(query);
+            });
             renderHistoryList(filtered);
         }
 
