@@ -881,7 +881,8 @@
         searchInput.addEventListener('keydown', function (e) {
             // --- NEW: AUTO-SUBMIT FOR FULL BARCODES ---
             searchInput.addEventListener('input', function (e) {
-                const value = e.target.value.toUpperCase().trim();
+                // This strips out all spaces, dashes, and invisible mobile formatting ghosts
+                const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
                 // Check if the typed/scanned string perfectly matches a full courier format
                 let isFullBarcode = false;
@@ -1071,8 +1072,9 @@
                     await db.collection("active_parcels").doc(awbId).delete();
                 }
 
-                // Make the UI disappear instantly to maintain fast-paced feel
-                document.getElementById(`card-${awbId}`).remove();
+                // Make the UI disappear instantly (if the real-time sync hasn't already done it)
+                const card = document.getElementById(`card-${awbId}`);
+                if (card) card.remove();
                 currentDisplayedIds = currentDisplayedIds.filter(id => id !== awbId);
 
                 if (currentDisplayedIds.length <= 1) collectAllBtn.classList.add('hidden');
