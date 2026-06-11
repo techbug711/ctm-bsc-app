@@ -879,37 +879,44 @@
         }
 
         searchInput.addEventListener('keydown', function (e) {
-            // --- NEW: AUTO-SUBMIT FOR FULL BARCODES ---
-            searchInput.addEventListener('input', function (e) {
-                // This strips out all spaces, dashes, and invisible mobile formatting ghosts
-                const value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            // --- NEW: AUTO-SUBMIT FOR FULL BARCODES (MOBILE OPTIMIZED) ---
+            function checkAndAutoSubmit() {
+                // A tiny 50ms delay lets mobile clipboards finish dumping text into the box
+                setTimeout(() => {
+                    // Grab directly from the input to ensure we have the latest pasted data
+                    const value = searchInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-                // Check if the typed/scanned string perfectly matches a full courier format
-                let isFullBarcode = false;
+                    let isFullBarcode = false;
 
-                if (value.startsWith("680") && /^680\d{12}$/.test(value)) {
-                    isFullBarcode = true; // Perfect Yoyi 15-digit match
-                } else if (value.startsWith("SPXMY") && /^SPXMY\d{12}$/.test(value)) {
-                    isFullBarcode = true; // Perfect SPX match
-                } else if (value.startsWith("MY") && /^MY\d{12,15}[A-Z]?$/.test(value)) {
-                    isFullBarcode = true; // Perfect standard MY match
-                }
-
-                // If it's a full barcode, auto-trigger the exact same logic as hitting 'Enter'
-                if (isFullBarcode) {
-                    if (!searchQueries.includes(value)) {
-                        searchQueries.push(value);
-                        const tag = document.createElement('div');
-                        tag.className = 'tag text-2xl';
-                        tag.innerHTML = `${value} <span onclick="removeTag(this, '${value}')" class="ml-2">✖</span>`;
-                        tagArea.appendChild(tag);
+                    if (value.startsWith("680") && /^680\d{12}$/.test(value)) {
+                        isFullBarcode = true;
+                    } else if (value.startsWith("SPXMY") && /^SPXMY\d{12}$/.test(value)) {
+                        isFullBarcode = true;
+                    } else if (value.startsWith("MY") && /^MY\d{12,15}[A-Z]?$/.test(value)) {
+                        isFullBarcode = true;
                     }
 
-                    searchInput.value = ''; // Clear the box for the next scan
-                    searchDbBtn.classList.remove('hidden');
-                    searchDbBtn.click(); // Fire the search instantly
-                }
-            });
+                    if (isFullBarcode) {
+                        if (!searchQueries.includes(value)) {
+                            searchQueries.push(value);
+                            const tag = document.createElement('div');
+                            tag.className = 'tag text-2xl';
+                            tag.innerHTML = `${value} <span onclick="removeTag(this, '${value}')" class="ml-2">✖</span>`;
+                            tagArea.appendChild(tag);
+                        }
+
+                        searchInput.value = '';
+                        searchDbBtn.classList.remove('hidden');
+
+                        // The Mobile Fix: Call the engine directly instead of faking a button tap
+                        executeLocalSearch();
+                    }
+                }, 50);
+            }
+
+            // Catch both fast typing and explicit long-press pasting
+            searchInput.addEventListener('input', checkAndAutoSubmit);
+            searchInput.addEventListener('paste', checkAndAutoSubmit);
             if (e.key === 'Enter') {
                 e.preventDefault();
                 const value = e.target.value.toUpperCase().trim();
