@@ -262,7 +262,7 @@
         let currentInventoryFilter = 'ALL';
         let allHistoryData = [];
 
-        // --- NEW: REAL-TIME FIREBASE LISTENER ---
+        // --- 2. REAL-TIME FIREBASE LISTENER ---
         function startRealTimeSync() {
             console.log("📡 Starting real-time sync with shelves...");
 
@@ -270,19 +270,16 @@
                 let parcels = [];
                 snapshot.forEach(doc => {
                     const data = doc.data();
-                    data.id = doc.id; // Store the document ID
+                    data.id = doc.id;
                     parcels.push(data);
                 });
 
-                // Keep our local array perfectly synced with Firebase
                 allInventoryData = parcels.sort((a, b) => a.location.localeCompare(b.location, undefined, { numeric: true, sensitivity: 'base' }));
 
-                // If the user is currently looking at the Inventory tab, update it instantly
                 if (!document.getElementById('section-inventory').classList.contains('hidden')) {
-                    loadInventory(); // Fixed function reference
+                    loadInventory();
                 }
 
-                // If they are on the Outbound tab and have a search active, update the results instantly
                 if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) {
                     executeLocalSearch();
                 }
@@ -291,7 +288,7 @@
             });
         }
 
-        // --- 2. SHIFT LOGIN LOGIC ---
+        // --- 3. SHIFT LOGIN LOGIC ---
         function loginWithPin(name, correctPin) {
             const enteredPin = prompt(`Enter PIN for ${name}:`);
             if (enteredPin === correctPin) {
@@ -324,7 +321,7 @@
             }
         }
 
-        // --- 3. ADVANCED AUDIO ENGINE ---
+        // --- 4. ADVANCED AUDIO ENGINE ---
         function playSuccessBeep() {
             const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
             audio.play().catch(e => console.log(e));
@@ -385,7 +382,7 @@
             } catch (e) { console.log(e); }
         }
 
-        // --- 4. TAB SWITCHING LOGIC ---
+        // --- 5. TAB SWITCHING LOGIC ---
         function switchTab(tab) {
             const tabs = ['inbound', 'outbound', 'inventory', 'history'];
             tabs.forEach(t => {
@@ -412,7 +409,7 @@
             }
         }
 
-        // --- 5. INVENTORY DASHBOARD LOGIC (OPTIMIZED TO READ LOCAL MEMORY) ---
+        // --- 6. INVENTORY DASHBOARD LOGIC ---
         function setInventoryFilter(platform) {
             currentInventoryFilter = platform;
             const platforms = ['ALL', 'SPX', 'YOYI'];
@@ -461,7 +458,6 @@
         function filterInventory() {
             const query = document.getElementById('inventorySearchInput').value.toUpperCase();
             const filtered = allInventoryData.filter(p => {
-                // Now filters by name as well
                 const nameStr = p.customerName ? p.customerName.toUpperCase() : '';
                 const matchesText = p.full_awb.includes(query) || p.location.includes(query) || nameStr.includes(query);
 
@@ -537,14 +533,13 @@
                     }
                     alert(`✅ AWB ${awb} moved to History.`);
                     document.getElementById('inventorySearchInput').value = '';
-                    // loadInventory is called automatically by onSnapshot!
                 } catch (error) {
                     alert("Error deleting parcel: " + error.message);
                 }
             }
         }
 
-        // --- 6. HISTORY LOGIC ---
+        // --- 7. HISTORY LOGIC ---
         async function loadHistory() {
             const listDiv = document.getElementById('historyList');
             listDiv.innerHTML = '<p class="text-center font-bold text-gray-500 py-8">Loading history...</p>';
@@ -573,9 +568,7 @@
         function filterHistory() {
             const query = document.getElementById('historySearchInput').value.toUpperCase();
             const filtered = allHistoryData.filter(p => {
-                // Ensure name exists before trying to convert to uppercase
                 const nameStr = p.customerName ? p.customerName.toUpperCase() : '';
-                // Return true if the query matches the AWB OR the Name
                 return p.full_awb.includes(query) || nameStr.includes(query);
             });
             renderHistoryList(filtered);
@@ -633,7 +626,7 @@
             }
         }
 
-        // --- 7. INBOUND LOGIC ---
+        // --- 8. INBOUND LOGIC ---
         const rackPrefix = document.getElementById('rackPrefix');
         const levelCounter = document.getElementById('levelCounter');
         const slotCounter = document.getElementById('slotCounter');
@@ -804,7 +797,7 @@
             }
         });
 
-        // --- 8. CAMERA SCANNER LOGIC ---
+        // --- 9. CAMERA SCANNER LOGIC ---
         const startCameraBtn = document.getElementById('startCameraBtn');
         const readerDiv = document.getElementById('reader');
         const inboundForm = document.getElementById('inboundForm');
@@ -856,7 +849,7 @@
             });
         });
 
-        // --- 9. OUTBOUND LOGIC (OPTIMIZED LOCAL SEARCH & AUTO-GROUP) ---
+        // --- 10. OUTBOUND LOGIC (OPTIMIZED & DEBOUNCED) ---
         const searchInput = document.getElementById('searchInput');
         const tagArea = document.getElementById('tagArea');
         const searchDbBtn = document.getElementById('searchDbBtn');
@@ -879,44 +872,6 @@
         }
 
         searchInput.addEventListener('keydown', function (e) {
-            // --- NEW: AUTO-SUBMIT FOR FULL BARCODES (MOBILE OPTIMIZED) ---
-            function checkAndAutoSubmit() {
-                // A tiny 50ms delay lets mobile clipboards finish dumping text into the box
-                setTimeout(() => {
-                    // Grab directly from the input to ensure we have the latest pasted data
-                    const value = searchInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-                    let isFullBarcode = false;
-
-                    if (value.startsWith("680") && /^680\d{12}$/.test(value)) {
-                        isFullBarcode = true;
-                    } else if (value.startsWith("SPXMY") && /^SPXMY\d{12}$/.test(value)) {
-                        isFullBarcode = true;
-                    } else if (value.startsWith("MY") && /^MY\d{12,15}[A-Z]?$/.test(value)) {
-                        isFullBarcode = true;
-                    }
-
-                    if (isFullBarcode) {
-                        if (!searchQueries.includes(value)) {
-                            searchQueries.push(value);
-                            const tag = document.createElement('div');
-                            tag.className = 'tag text-2xl';
-                            tag.innerHTML = `${value} <span onclick="removeTag(this, '${value}')" class="ml-2">✖</span>`;
-                            tagArea.appendChild(tag);
-                        }
-
-                        searchInput.value = '';
-                        searchDbBtn.classList.remove('hidden');
-
-                        // The Mobile Fix: Call the engine directly instead of faking a button tap
-                        executeLocalSearch();
-                    }
-                }, 50);
-            }
-
-            // Catch both fast typing and explicit long-press pasting
-            searchInput.addEventListener('input', checkAndAutoSubmit);
-            searchInput.addEventListener('paste', checkAndAutoSubmit);
             if (e.key === 'Enter') {
                 e.preventDefault();
                 const value = e.target.value.toUpperCase().trim();
@@ -952,13 +907,49 @@
             }
         }
 
-        // Trigger the Local Search Engine
+        // --- DEBOUNCED AUTO-SUBMIT FOR FULL BARCODES (MOBILE SAFE) ---
+        let autoSubmitTimeout;
+
+        function checkAndAutoSubmit() {
+            clearTimeout(autoSubmitTimeout);
+
+            autoSubmitTimeout = setTimeout(() => {
+                const value = searchInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+                let isFullBarcode = false;
+
+                if (value.startsWith("680") && /^680\d{12}$/.test(value)) {
+                    isFullBarcode = true;
+                } else if (value.startsWith("SPXMY") && /^SPXMY\d{12}$/.test(value)) {
+                    isFullBarcode = true;
+                } else if (value.startsWith("MY") && /^MY\d{12,15}[A-Z]?$/.test(value)) {
+                    isFullBarcode = true;
+                }
+
+                if (isFullBarcode) {
+                    if (!searchQueries.includes(value)) {
+                        searchQueries.push(value);
+                        const tag = document.createElement('div');
+                        tag.className = 'tag text-2xl';
+                        tag.innerHTML = `${value} <span onclick="removeTag(this, '${value}')" class="ml-2">✖</span>`;
+                        tagArea.appendChild(tag);
+                    }
+
+                    searchInput.value = '';
+                    searchDbBtn.classList.remove('hidden');
+
+                    executeLocalSearch();
+                }
+            }, 100);
+        }
+
+        searchInput.addEventListener('input', checkAndAutoSubmit);
+
         searchDbBtn.addEventListener('click', () => {
             if (searchQueries.length === 0) return;
             executeLocalSearch();
         });
 
-        // The Auto-Group Superpower
         function executeLocalSearch() {
             resultsArea.innerHTML = '';
             collectAllBtn.classList.add('hidden');
@@ -966,53 +957,47 @@
             currentDisplayedData = {};
 
             let resultsHTML = '';
-
-            // Sets to prevent duplicates
             let directMatches = new Set();
             let namesToGroup = new Set();
 
-            // STEP 1: Find direct matches
             allInventoryData.forEach(data => {
                 const awb = data.full_awb.toUpperCase();
                 const cleanAwb = awb.replace(/[A-Z]$/, '');
-                const nameStr = data.customerName ? data.customerName.toUpperCase() : '';
+                const nameStr = data.customerName ? data.customerName.toUpperCase().trim() : '';
 
                 let matchedQuery = null;
                 const isMatch = searchQueries.some(q => {
-                    if (awb.endsWith(q) || cleanAwb.endsWith(q) || awb === q || nameStr.includes(q)) {
-                        matchedQuery = q;
-                        return true;
-                    }
-                    return false;
+                    const cleanQuery = q.trim();
+                    return awb.endsWith(cleanQuery) || cleanAwb.endsWith(cleanQuery) || awb === cleanQuery || nameStr.includes(cleanQuery);
                 });
 
                 if (isMatch) {
-                    data._matchedQuery = matchedQuery;
+                    data._matchedQuery = searchQueries.find(q => awb.includes(q.trim()) || nameStr.includes(q.trim()));
                     directMatches.add(data);
 
                     if (data.customerName) {
-                        namesToGroup.add(data.customerName);
+                        namesToGroup.add(data.customerName.toUpperCase().trim());
                     }
                 }
             });
 
-            // STEP 2: Find all related parcels sharing the name
             let finalParcelsToDisplay = new Set([...directMatches]);
 
             allInventoryData.forEach(data => {
-                if (data.customerName && namesToGroup.has(data.customerName)) {
-                    finalParcelsToDisplay.add(data);
+                if (data.customerName) {
+                    const normalizedItemName = data.customerName.toUpperCase().trim();
+                    if (namesToGroup.has(normalizedItemName)) {
+                        finalParcelsToDisplay.add(data);
+                    }
                 }
             });
 
-            // STEP 3: Render to the UI (using your exact Tailwind styling)
             if (finalParcelsToDisplay.size === 0) {
                 resultsArea.innerHTML = '<p class="text-red-500 text-xl font-bold text-center">No active parcels found matching those digits.</p>';
                 return;
             }
 
             finalParcelsToDisplay.forEach(data => {
-                // Determine ID (fallback to AWB if doc ID missing)
                 const docId = data.id || data.full_awb;
                 const awb = data.full_awb.toUpperCase();
                 const matchedQuery = data._matchedQuery;
@@ -1024,28 +1009,29 @@
                 const platformBadge = isYoyi ? '<span class="bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
 
                 let displayAwb = awb;
-                if (matchedQuery && awb.includes(matchedQuery)) {
-                    let lastIdx = awb.lastIndexOf(matchedQuery);
-                    displayAwb = awb.substring(0, lastIdx) +
-                        `<span class="text-black font-black text-lg bg-yellow-200 px-1 rounded shadow-sm border border-yellow-400">` +
-                        awb.substring(lastIdx, lastIdx + matchedQuery.length) +
-                        `</span>` +
-                        awb.substring(lastIdx + matchedQuery.length);
+                if (matchedQuery && awb.includes(matchedQuery.toUpperCase().trim())) {
+                    let qToken = matchedQuery.toUpperCase().trim();
+                    let lastIdx = awb.lastIndexOf(qToken);
+                    if (lastIdx !== -1) {
+                        displayAwb = awb.substring(0, lastIdx) +
+                            `<span class="text-black font-black text-lg bg-yellow-200 px-1 rounded shadow-sm border border-yellow-400">` +
+                            awb.substring(lastIdx, lastIdx + qToken.length) +
+                            `</span>` +
+                            awb.substring(lastIdx + qToken.length);
+                    }
                 }
 
-                // Inject the auto-found badge if applicable
-                // Added shrink-0 and adjusted padding for mobile
+                // COMPACT MOBILE BADGE UI
                 let relatedBadge = (!directMatches.has(data))
-                    ? `<span class="bg-blue-100 text-blue-700 text-xs md:text-sm font-bold px-2 py-1 rounded-full border border-blue-200 inline-flex items-center shrink-0">🔗 Auto-Found</span>`
+                    ? `<span class="bg-blue-100 text-blue-700 text-[10px] md:text-xs font-bold px-2 py-1 rounded shadow-sm border border-blue-200 shrink-0 uppercase tracking-wide">Auto-Found</span>`
                     : '';
 
-                // Wrapped in a flex container so the name truncates safely but the badge never shrinks
                 const customerDisplay = data.customerName
-                    ? `<div class="flex items-center gap-2 mb-2 w-full overflow-hidden">
-                           <p class="text-2xl md:text-3xl font-black text-blue-900 truncate">👤 ${data.customerName}</p>
+                    ? `<div class="flex items-center justify-between gap-2 mb-2 w-full overflow-hidden">
+                           <p class="text-2xl md:text-3xl font-black text-blue-900 truncate">${data.customerName}</p>
                            ${relatedBadge}
                        </div>`
-                    : `<p class="text-sm font-bold text-gray-400 mb-2 italic">👤 No name data yet</p>`;
+                    : `<p class="text-sm font-bold text-gray-400 mb-2 italic">No name data yet</p>`;
 
                 resultsHTML += `
                     <div class="bg-gray-50 border-2 border-gray-300 p-6 rounded-lg flex justify-between items-center" id="card-${docId}">
@@ -1084,9 +1070,10 @@
                     await db.collection("active_parcels").doc(awbId).delete();
                 }
 
-                // Make the UI disappear instantly (if the real-time sync hasn't already done it)
+                // RACE CONDITION FIX
                 const card = document.getElementById(`card-${awbId}`);
                 if (card) card.remove();
+
                 currentDisplayedIds = currentDisplayedIds.filter(id => id !== awbId);
 
                 if (currentDisplayedIds.length <= 1) collectAllBtn.classList.add('hidden');
