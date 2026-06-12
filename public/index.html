@@ -95,6 +95,11 @@
                 onclick="switchTab('inventory')">
                 📊 STOCK
             </button>
+            <button id="tab-bulk"
+                class="flex-1 py-3 text-center text-gray-500 text-sm md:text-lg hover:bg-gray-50 transition"
+                onclick="switchTab('bulk')">
+                🗂️ MULTI
+            </button>
             <button id="tab-history"
                 class="flex-1 py-3 text-center text-gray-500 text-sm md:text-lg hover:bg-gray-50 transition"
                 onclick="switchTab('history')">
@@ -215,6 +220,26 @@
             </div>
         </div>
 
+        <div id="section-bulk" class="p-4 md:p-8 hidden">
+            <h2 class="text-2xl font-bold mb-2 text-gray-800">Multi-Parcel Consolidation</h2>
+            <p class="text-gray-500 font-bold mb-6">Customers with 3 or more scattered parcels.</p>
+
+            <div
+                class="bg-blue-50 p-6 rounded-xl border-2 border-blue-200 mb-6 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                <p class="text-blue-800 font-bold text-center md:text-left">Move these to the dedicated <span
+                        class="text-2xl font-black text-blue-900 mx-1">BULK-RACK</span> to free up standard slots.</p>
+                <button onclick="loadBulkTab()"
+                    class="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition shadow-md w-full md:w-auto shrink-0">
+                    🔄 Scan Shelves
+                </button>
+            </div>
+
+            <div id="bulkList" class="space-y-4">
+                <p class="text-gray-500 italic col-span-full text-center">Click Scan Shelves to detect multi-parcel
+                    customers.</p>
+            </div>
+        </div>
+
         <div id="section-history" class="p-4 md:p-8 hidden">
             <h2 class="text-2xl font-bold mb-6 text-gray-800">Recent Collections (History)</h2>
 
@@ -279,7 +304,9 @@
                 if (!document.getElementById('section-inventory').classList.contains('hidden')) {
                     loadInventory();
                 }
-
+                if (!document.getElementById('section-bulk').classList.contains('hidden')) {
+                    loadBulkTab();
+                }
                 if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) {
                     executeLocalSearch();
                 }
@@ -384,7 +411,7 @@
 
         // --- 5. TAB SWITCHING LOGIC ---
         function switchTab(tab) {
-            const tabs = ['inbound', 'outbound', 'inventory', 'history'];
+            const tabs = ['inbound', 'outbound', 'inventory', 'bulk', 'history'];
             tabs.forEach(t => {
                 document.getElementById(`section-${t}`).classList.toggle('hidden', tab !== t);
                 const btn = document.getElementById(`tab-${t}`);
@@ -402,6 +429,9 @@
             if (tab === 'inventory') {
                 document.getElementById('inventorySearchInput').value = '';
                 loadInventory();
+            }
+            if (tab === 'bulk') {
+                loadBulkTab();
             }
             if (tab === 'history') {
                 document.getElementById('historySearchInput').value = '';
@@ -479,10 +509,8 @@
                 const timeString = new Date(p.timestamp).toLocaleString('en-MY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
                 const isYoyi = p.full_awb.startsWith('680');
-                // Added "select-none" so the text cannot be copied
                 const platformBadge = isYoyi ? '<span class="select-none bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="select-none bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
 
-                // Removed the 👤 icon
                 const nameDisplay = p.customerName ? `<p class="text-sm font-bold text-blue-800 mt-1 truncate">${p.customerName}</p>` : '';
 
                 let deleteBtn = '';
@@ -584,7 +612,6 @@
 
             parcels.forEach(p => {
                 const timeString = new Date(p.collectedAt).toLocaleString('en-MY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                // Removed the 👤 icon
                 const customerDisplay = p.customerName ? `<span class="text-blue-800 font-black ml-2 block md:inline">${p.customerName}</span>` : '';
 
                 html += `
@@ -1010,7 +1037,6 @@
                 currentDisplayedIds.push(docId);
                 currentDisplayedData[docId] = data;
 
-                // Added "select-none" to Outbound badges
                 const isYoyi = awb.startsWith('680');
                 const platformBadge = isYoyi ? '<span class="select-none bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="select-none bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
 
@@ -1027,7 +1053,6 @@
                     }
                 }
 
-                // Shrunk tag drastically (text-[9px], tighter padding)
                 let relatedBadge = (!directMatches.has(data))
                     ? `<span class="select-none bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm border border-blue-200 shrink-0 uppercase">Auto-Found</span>`
                     : '';
@@ -1078,7 +1103,6 @@
                     await db.collection("active_parcels").doc(awbId).delete();
                 }
 
-                // RACE CONDITION FIX
                 const card = document.getElementById(`card-${awbId}`);
                 if (card) card.remove();
 
@@ -1118,6 +1142,94 @@
                 collectAllBtn.innerHTML = "📦 COLLECT ALL DISPLAYED";
             }
         });
+
+        // --- 11. BULK / MULTI-PARCEL CONSOLIDATION LOGIC ---
+
+        function loadBulkTab() {
+            const listDiv = document.getElementById('bulkList');
+            listDiv.innerHTML = '<p class="text-blue-500 font-bold text-xl text-center py-8">Scanning shelves...</p>';
+
+            setTimeout(() => {
+                let groups = {};
+
+                allInventoryData.forEach(p => {
+                    if (p.customerName) {
+                        let name = p.customerName.toUpperCase().trim();
+                        if (!groups[name]) groups[name] = [];
+                        groups[name].push(p);
+                    }
+                });
+
+                let bulkHTML = '';
+                let matchCount = 0;
+
+                Object.keys(groups).forEach(name => {
+                    let parcels = groups[name];
+
+                    if (parcels.length >= 3) {
+
+                        let allAlreadyInBulk = parcels.every(p => p.location === 'BULK-RACK');
+
+                        if (!allAlreadyInBulk) {
+                            matchCount++;
+                            let parcelDetails = '';
+                            let docIdsToMove = [];
+
+                            parcels.forEach(p => {
+                                docIdsToMove.push(p.id || p.full_awb);
+                                parcelDetails += `<span class="inline-block bg-white border border-gray-300 text-gray-700 text-xs font-bold px-2 py-1 rounded m-1">Rack: <span class="text-blue-700 text-sm">${p.location}</span> (${p.last4})</span>`;
+                            });
+
+                            const stringifiedIds = JSON.stringify(docIdsToMove).replace(/"/g, '&quot;');
+
+                            bulkHTML += `
+                                <div class="bg-white border-2 border-blue-200 p-5 rounded-lg shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                                    <div class="w-full md:w-2/3">
+                                        <p class="text-2xl font-black text-blue-900 mb-1">${name} <span class="text-sm bg-red-100 text-red-700 px-2 py-1 rounded-full ml-2">${parcels.length} Items</span></p>
+                                        <p class="text-sm text-gray-500 font-bold mb-2">Currently scattered at:</p>
+                                        <div>${parcelDetails}</div>
+                                    </div>
+                                    <button onclick="moveParcelsToBulk('${stringifiedIds}', '${name.replace(/'/g, "\\'")}')" class="bg-blue-800 text-white font-bold px-6 py-4 rounded-lg hover:bg-blue-900 transition shadow-md w-full md:w-1/3 text-lg flex-shrink-0 border-2 border-blue-900">
+                                        📦 Mark as MOVED
+                                    </button>
+                                </div>
+                            `;
+                        }
+                    }
+                });
+
+                if (matchCount === 0) {
+                    listDiv.innerHTML = '<p class="text-green-600 text-2xl font-bold text-center py-8">All clear! No customers have 3+ scattered parcels. 🎉</p>';
+                } else {
+                    listDiv.innerHTML = bulkHTML;
+                }
+            }, 250);
+        }
+
+        async function moveParcelsToBulk(stringifiedIds, customerName) {
+            const docIds = JSON.parse(stringifiedIds.replace(/&quot;/g, '"'));
+
+            if (!confirm(`Are you sure you have physically moved all ${docIds.length} parcels for ${customerName} to the BULK-RACK?`)) {
+                return;
+            }
+
+            try {
+                const batch = db.batch();
+
+                docIds.forEach(id => {
+                    const docRef = db.collection("active_parcels").doc(id);
+                    batch.update(docRef, { location: 'BULK-RACK' });
+                });
+
+                await batch.commit();
+
+                alert(`✅ Successfully updated ${docIds.length} parcels to BULK-RACK!`);
+                loadBulkTab();
+
+            } catch (error) {
+                alert("Error moving parcels: " + error.message);
+            }
+        }
     </script>
 </body>
 
