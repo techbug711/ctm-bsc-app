@@ -1168,7 +1168,8 @@
 
                     if (parcels.length >= 3) {
 
-                        let allAlreadyInBulk = parcels.every(p => p.location === 'BULK-RACK');
+                        // Upgraded: Checks if they are already in ANY rack starting with 'BULK'
+                        let allAlreadyInBulk = parcels.every(p => p.location.startsWith('BULK'));
 
                         if (!allAlreadyInBulk) {
                             matchCount++;
@@ -1177,21 +1178,33 @@
 
                             parcels.forEach(p => {
                                 docIdsToMove.push(p.id || p.full_awb);
-                                parcelDetails += `<span class="inline-block bg-white border border-gray-300 text-gray-700 text-xs font-bold px-2 py-1 rounded m-1">Rack: <span class="text-blue-700 text-sm">${p.location}</span> (${p.last4})</span>`;
+                                // Upgraded UI: Full AWB, Highlighted Yellow, Stacked vertically
+                                parcelDetails += `
+                                    <div class="bg-gray-50 border border-gray-300 px-3 py-2 rounded flex justify-between items-center w-full">
+                                        <span class="text-gray-600 text-sm font-bold">Rack: <span class="text-blue-700 text-xl font-black">${p.location}</span></span>
+                                        <span class="text-gray-900 font-black text-lg select-all bg-yellow-200 px-2 py-0.5 rounded shadow-sm border border-yellow-400">${p.full_awb}</span>
+                                    </div>
+                                `;
                             });
 
                             const stringifiedIds = JSON.stringify(docIdsToMove).replace(/"/g, '&quot;');
 
+                            // Upgraded UI: Added Custom Rack Input Field
                             bulkHTML += `
-                                <div class="bg-white border-2 border-blue-200 p-5 rounded-lg shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                                <div class="bg-white border-2 border-blue-200 p-5 rounded-lg shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                                     <div class="w-full md:w-2/3">
                                         <p class="text-2xl font-black text-blue-900 mb-1">${name} <span class="text-sm bg-red-100 text-red-700 px-2 py-1 rounded-full ml-2">${parcels.length} Items</span></p>
                                         <p class="text-sm text-gray-500 font-bold mb-2">Currently scattered at:</p>
-                                        <div>${parcelDetails}</div>
+                                        <div class="flex flex-col gap-2 w-full">${parcelDetails}</div>
                                     </div>
-                                    <button onclick="moveParcelsToBulk('${stringifiedIds}', '${name.replace(/'/g, "\\'")}')" class="bg-blue-800 text-white font-bold px-6 py-4 rounded-lg hover:bg-blue-900 transition shadow-md w-full md:w-1/3 text-lg flex-shrink-0 border-2 border-blue-900">
-                                        📦 Mark as MOVED
-                                    </button>
+                                    <div class="w-full md:w-1/3 flex flex-col gap-2 shrink-0">
+                                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide">Destination Rack:</label>
+                                        <input type="text" id="bulk-input-${matchCount}" value="BULK-RACK" class="w-full p-3 border-2 border-blue-300 rounded-lg text-center font-black uppercase text-blue-900 focus:border-blue-600 focus:outline-none" placeholder="e.g. BULK-A">
+                                        
+                                        <button onclick="moveParcelsToBulk('${stringifiedIds}', '${name.replace(/'/g, "\\'")}', 'bulk-input-${matchCount}')" class="bg-blue-800 text-white font-bold px-6 py-4 rounded-lg hover:bg-blue-900 transition shadow-md w-full text-lg border-2 border-blue-900 mt-2">
+                                            📦 Mark as MOVED
+                                        </button>
+                                    </div>
                                 </div>
                             `;
                         }
@@ -1206,10 +1219,12 @@
             }, 250);
         }
 
-        async function moveParcelsToBulk(stringifiedIds, customerName) {
+        async function moveParcelsToBulk(stringifiedIds, customerName, inputId) {
             const docIds = JSON.parse(stringifiedIds.replace(/&quot;/g, '"'));
+            // Dynamically grabs the rack name they typed, defaults to 'BULK-RACK' if left blank
+            const destinationRack = document.getElementById(inputId).value.toUpperCase().trim() || 'BULK-RACK';
 
-            if (!confirm(`Are you sure you have physically moved all ${docIds.length} parcels for ${customerName} to the BULK-RACK?`)) {
+            if (!confirm(`Are you sure you have physically moved all ${docIds.length} parcels for ${customerName} to ${destinationRack}?`)) {
                 return;
             }
 
@@ -1218,12 +1233,12 @@
 
                 docIds.forEach(id => {
                     const docRef = db.collection("active_parcels").doc(id);
-                    batch.update(docRef, { location: 'BULK-RACK' });
+                    batch.update(docRef, { location: destinationRack });
                 });
 
                 await batch.commit();
 
-                alert(`✅ Successfully updated ${docIds.length} parcels to BULK-RACK!`);
+                alert(`✅ Successfully updated ${docIds.length} parcels to ${destinationRack}!`);
                 loadBulkTab();
 
             } catch (error) {
