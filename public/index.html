@@ -479,9 +479,11 @@
                 const timeString = new Date(p.timestamp).toLocaleString('en-MY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
                 const isYoyi = p.full_awb.startsWith('680');
-                const platformBadge = isYoyi ? '<span class="bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
+                // Added "select-none" so the text cannot be copied
+                const platformBadge = isYoyi ? '<span class="select-none bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="select-none bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
 
-                const nameDisplay = p.customerName ? `<p class="text-sm font-bold text-blue-800 mt-1 truncate">👤 ${p.customerName}</p>` : '';
+                // Removed the 👤 icon
+                const nameDisplay = p.customerName ? `<p class="text-sm font-bold text-blue-800 mt-1 truncate">${p.customerName}</p>` : '';
 
                 let deleteBtn = '';
                 if (currentUser === 'Admin') {
@@ -500,7 +502,9 @@
                                     </div>
                                 </div>
                                 ${nameDisplay}
-                                <p class="text-sm text-gray-800 font-bold uppercase tracking-wider mt-1 break-words">${p.full_awb}${platformBadge}</p>
+                                <p class="text-sm text-gray-800 font-bold uppercase tracking-wider mt-1 break-words">
+                                    <span class="select-all cursor-pointer">${p.full_awb}</span>${platformBadge}
+                                </p>
                             </div>
                         </div>
                         ${deleteBtn}
@@ -580,12 +584,13 @@
 
             parcels.forEach(p => {
                 const timeString = new Date(p.collectedAt).toLocaleString('en-MY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                const customerDisplay = p.customerName ? `<span class="text-blue-800 font-black ml-2 block md:inline">👤 ${p.customerName}</span>` : '';
+                // Removed the 👤 icon
+                const customerDisplay = p.customerName ? `<span class="text-blue-800 font-black ml-2 block md:inline">${p.customerName}</span>` : '';
 
                 html += `
                 <div class="bg-white border-2 border-gray-200 p-4 rounded-lg shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4" id="hist-${p.full_awb}">
                     <div>
-                        <p class="text-xl font-bold text-gray-800 break-all">${p.full_awb}${customerDisplay}</p>
+                        <p class="text-xl font-bold text-gray-800 break-all"><span class="select-all cursor-pointer">${p.full_awb}</span>${customerDisplay}</p>
                         <p class="text-sm text-gray-500 mt-1">From Rack: <span class="font-bold text-purple-700 text-lg">${p.location}</span></p>
                         <p class="text-xs text-gray-400 mt-1">Collected By: <span class="font-bold text-gray-600">${p.collectedBy}</span> at ${timeString}</p>
                     </div>
@@ -1005,8 +1010,9 @@
                 currentDisplayedIds.push(docId);
                 currentDisplayedData[docId] = data;
 
+                // Added "select-none" to Outbound badges
                 const isYoyi = awb.startsWith('680');
-                const platformBadge = isYoyi ? '<span class="bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
+                const platformBadge = isYoyi ? '<span class="select-none bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="select-none bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
 
                 let displayAwb = awb;
                 if (matchedQuery && awb.includes(matchedQuery.toUpperCase().trim())) {
@@ -1021,9 +1027,9 @@
                     }
                 }
 
-                // COMPACT MOBILE BADGE UI
+                // Shrunk tag drastically (text-[9px], tighter padding)
                 let relatedBadge = (!directMatches.has(data))
-                    ? `<span class="bg-blue-100 text-blue-700 text-[10px] md:text-xs font-bold px-2 py-1 rounded shadow-sm border border-blue-200 shrink-0 uppercase tracking-wide">Auto-Found</span>`
+                    ? `<span class="select-none bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm border border-blue-200 shrink-0 uppercase">Auto-Found</span>`
                     : '';
 
                 const customerDisplay = data.customerName
@@ -1037,10 +1043,12 @@
                     <div class="bg-gray-50 border-2 border-gray-300 p-6 rounded-lg flex justify-between items-center" id="card-${docId}">
                         <div class="overflow-hidden">
                             ${customerDisplay}
-                            <p class="text-sm text-gray-500 font-bold uppercase tracking-wider">Tracking: ${displayAwb}${platformBadge}</p>
+                            <p class="text-sm text-gray-500 font-bold uppercase tracking-wider mt-1">
+                                Tracking: <span class="text-gray-900 font-black text-lg select-all">${displayAwb}</span>${platformBadge}
+                            </p>
                             <p class="text-3xl md:text-4xl font-black text-blue-700 mt-2">${data.location}</p>
                         </div>
-                        <button onclick="markCollected('${docId}')" class="bg-blue-600 text-white px-6 md:px-8 py-4 rounded-lg text-xl md:text-2xl font-bold hover:bg-blue-700 shadow-md transition ml-4">
+                        <button onclick="markCollected('${docId}')" class="bg-blue-600 text-white px-6 md:px-8 py-4 rounded-lg text-xl md:text-2xl font-bold hover:bg-blue-700 shadow-md transition ml-4 shrink-0">
                             Collect
                         </button>
                     </div>
