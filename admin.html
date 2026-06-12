@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CollectCo WMS - Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="bg-gray-100 font-sans">
+
+    <div class="bg-gray-900 text-white p-4 md:p-6 shadow-lg flex justify-between items-center sticky top-0 z-50">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-black tracking-tight text-blue-400">CollectCo Admin</h1>
+            <p class="text-gray-400 text-sm font-bold mt-1">Live Operational Dashboard</p>
+        </div>
+        <div class="text-right">
+            <p id="clockDisplay" class="text-xl md:text-2xl font-mono font-bold text-yellow-400">00:00:00</p>
+            <p id="dateDisplay" class="text-xs md:text-sm text-gray-400 font-bold uppercase"></p>
+        </div>
+    </div>
+
+    <div class="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white p-6 rounded-xl border-l-8 border-blue-500 shadow-sm flex flex-col justify-center">
+                <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Total Active Inventory</p>
+                <p id="kpi-total-active" class="text-5xl font-black text-gray-800 mt-2">0</p>
+            </div>
+            <div class="bg-white p-6 rounded-xl border-l-8 border-green-500 shadow-sm flex flex-col justify-center">
+                <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Scanned In (Today)</p>
+                <p id="kpi-inbound-today" class="text-5xl font-black text-gray-800 mt-2">0</p>
+            </div>
+            <div class="bg-white p-6 rounded-xl border-l-8 border-purple-500 shadow-sm flex flex-col justify-center">
+                <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Collected Out (Today)</p>
+                <p id="kpi-outbound-today" class="text-5xl font-black text-gray-800 mt-2">0</p>
+            </div>
+            <div class="bg-white p-6 rounded-xl border-l-8 border-red-500 shadow-sm flex flex-col justify-center">
+                <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Dead Stock (5+ Days)</p>
+                <p id="kpi-dead-stock" class="text-5xl font-black text-red-600 mt-2">0</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <div class="bg-white p-6 rounded-xl shadow-sm lg:col-span-1 border border-gray-200">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 uppercase tracking-wide">Platform Split (Active)</h3>
+                <div class="relative h-64">
+                    <canvas id="platformChart"></canvas>
+                </div>
+                <div class="flex justify-between mt-4 border-t pt-4">
+                    <div class="text-center w-1/2 border-r">
+                        <p class="text-orange-600 font-black text-2xl" id="stat-spx">0</p>
+                        <p class="text-xs text-gray-500 font-bold">SPX</p>
+                    </div>
+                    <div class="text-center w-1/2">
+                        <p class="text-green-600 font-black text-2xl" id="stat-yoyi">0</p>
+                        <p class="text-xs text-gray-500 font-bold">YOYI</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm lg:col-span-2 border border-gray-200">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 uppercase tracking-wide">Staff Leaderboard (Today's Actions)</h3>
+                <div class="relative h-64 w-full">
+                    <canvas id="staffChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-red-800 uppercase tracking-wide">🚨 Dead Stock Hitlist (Return to Sender)</h3>
+                <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow">Requires Action</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b">
+                            <th class="p-4 font-bold">Days Old</th>
+                            <th class="p-4 font-bold">Location</th>
+                            <th class="p-4 font-bold">Tracking Number</th>
+                            <th class="p-4 font-bold">Customer Name</th>
+                            <th class="p-4 font-bold">Scanned By</th>
+                        </tr>
+                    </thead>
+                    <tbody id="deadStockTableBody" class="divide-y divide-gray-100">
+                        <tr>
+                            <td colspan="5" class="p-8 text-center text-gray-400 font-bold italic">Loading dead stock data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 1. FIREBASE CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAS52-pEsaz2jLgtNhV3R9w5rBt0iW72EM",
+            authDomain: "ctm-bsc-98545.firebaseapp.com",
+            projectId: "ctm-bsc-98545",
+            storageBucket: "ctm-bsc-98545.firebasestorage.app",
+            messagingSenderId: "386151094372",
+            appId: "1:386151094372:web:a46f10a1fc8383af412771",
+            measurementId: "G-2G2EFE9EF9"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // --- 2. CLOCK & DATE LOGIC ---
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clockDisplay').textContent = now.toLocaleTimeString('en-MY', { hour12: false });
+            document.getElementById('dateDisplay').textContent = now.toLocaleDateString('en-MY', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- 3. CHART SETUP ---
+        const platformCtx = document.getElementById('platformChart').getContext('2d');
+        const staffCtx = document.getElementById('staffChart').getContext('2d');
+
+        const platformChart = new Chart(platformCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['SPX', 'YOYI'],
+                datasets: [{
+                    data: [0, 0],
+                    backgroundColor: ['#f97316', '#22c55e'], // Tailwind Orange-500, Green-500
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                cutout: '70%'
+            }
+        });
+
+        const staffChart = new Chart(staffCtx, {
+            type: 'bar',
+            data: {
+                labels: [], 
+                datasets: [
+                    {
+                        label: 'Inbound Scans',
+                        data: [],
+                        backgroundColor: '#3b82f6', // Blue
+                        borderRadius: 4
+                    },
+                    {
+                        label: 'Outbound Collections',
+                        data: [],
+                        backgroundColor: '#8b5cf6', // Purple
+                        borderRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } }
+                },
+                plugins: { legend: { position: 'top' } }
+            }
+        });
+
+        // --- 4. REAL-TIME DATA ENGINE ---
+        function startAdminSync() {
+            // Get midnight of the current day for "Today" filters
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+            const todayTimestamp = startOfToday.getTime();
+
+            // Dead stock threshold: 5 days ago
+            const fiveDaysAgo = Date.now() - (5 * 24 * 60 * 60 * 1000);
+
+            // ACTIVE INVENTORY LISTENER
+            db.collection("active_parcels").onSnapshot((snapshot) => {
+                let totalActive = 0;
+                let inboundToday = 0;
+                let spxCount = 0;
+                let yoyiCount = 0;
+                let deadStock = [];
+                let staffInboundMap = {};
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    totalActive++;
+
+                    // Platform Split Math
+                    const isYoyi = data.full_awb.startsWith('680');
+                    if (isYoyi) yoyiCount++; else spxCount++;
+
+                    // Today's Inbound Math & Staff Tracking
+                    if (data.timestamp >= todayTimestamp) {
+                        inboundToday++;
+                        const staff = data.scannedBy || 'Unknown';
+                        staffInboundMap[staff] = (staffInboundMap[staff] || 0) + 1;
+                    }
+
+                    // Dead Stock Math
+                    if (data.timestamp < fiveDaysAgo) {
+                        deadStock.push(data);
+                    }
+                });
+
+                // Update KPIs
+                document.getElementById('kpi-total-active').textContent = totalActive;
+                document.getElementById('kpi-inbound-today').textContent = inboundToday;
+                document.getElementById('kpi-dead-stock').textContent = deadStock.length;
+
+                // Update Platform Doughnut Chart
+                document.getElementById('stat-spx').textContent = spxCount;
+                document.getElementById('stat-yoyi').textContent = yoyiCount;
+                platformChart.data.datasets[0].data = [spxCount, yoyiCount];
+                platformChart.update();
+
+                // Render Dead Stock Table
+                renderDeadStockTable(deadStock.sort((a, b) => a.timestamp - b.timestamp));
+                
+                // Triggers staff chart update (Needs to merge with outbound data, handled via variable scope in a real app, but we will just pass it to a master renderer here)
+                window.latestStaffInbound = staffInboundMap;
+                renderStaffChart();
+            });
+
+            // OUTBOUND HISTORY LISTENER (Limited to recent to save reads)
+            db.collection("collected_parcels")
+              .where("collectedAt", ">=", todayTimestamp)
+              .onSnapshot((snapshot) => {
+                let outboundToday = 0;
+                let staffOutboundMap = {};
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    outboundToday++;
+                    const staff = data.collectedBy || 'Unknown';
+                    staffOutboundMap[staff] = (staffOutboundMap[staff] || 0) + 1;
+                });
+
+                document.getElementById('kpi-outbound-today').textContent = outboundToday;
+                
+                window.latestStaffOutbound = staffOutboundMap;
+                renderStaffChart();
+            });
+        }
+
+        // --- 5. RENDERERS ---
+        function renderStaffChart() {
+            const inboundData = window.latestStaffInbound || {};
+            const outboundData = window.latestStaffOutbound || {};
+            
+            // Get a unique list of all staff names from both maps
+            const allStaff = new Set([...Object.keys(inboundData), ...Object.keys(outboundData)]);
+            // Filter out default/empty Admin noise if you want, but leaving it shows everything
+            const staffLabels = Array.from(allStaff).sort();
+
+            const inboundTally = staffLabels.map(name => inboundData[name] || 0);
+            const outboundTally = staffLabels.map(name => outboundData[name] || 0);
+
+            staffChart.data.labels = staffLabels;
+            staffChart.data.datasets[0].data = inboundTally;
+            staffChart.data.datasets[1].data = outboundTally;
+            staffChart.update();
+        }
+
+        function renderDeadStockTable(deadStock) {
+            const tbody = document.getElementById('deadStockTableBody');
+            
+            if (deadStock.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-green-600 font-bold text-lg">No dead stock! Racks are healthy. 🚀</td></tr>`;
+                return;
+            }
+
+            let html = '';
+            deadStock.forEach(p => {
+                const daysOld = Math.floor((Date.now() - p.timestamp) / (1000 * 60 * 60 * 24));
+                const platformBadge = p.full_awb.startsWith('680') 
+                    ? '<span class="bg-green-100 text-green-800 text-[10px] px-2 py-0.5 rounded font-black ml-2 align-top uppercase">YOYI</span>' 
+                    : '<span class="bg-orange-100 text-orange-800 text-[10px] px-2 py-0.5 rounded font-black ml-2 align-top uppercase">SPX</span>';
+
+                html += `
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="p-4">
+                            <span class="bg-red-100 text-red-800 font-black px-3 py-1 rounded-lg">${daysOld} Days</span>
+                        </td>
+                        <td class="p-4 text-2xl font-black text-blue-700">${p.location}</td>
+                        <td class="p-4 font-bold text-gray-800 select-all">${p.full_awb} ${platformBadge}</td>
+                        <td class="p-4 font-bold text-gray-600">${p.customerName || '<i class="text-gray-400">Unknown</i>'}</td>
+                        <td class="p-4 text-sm font-bold text-gray-500">${p.scannedBy || 'Unknown'}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        // Boot the engine
+        startAdminSync();
+
+    </script>
+</body>
+
+</html>
