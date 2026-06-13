@@ -46,7 +46,7 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
+
             <div class="bg-white p-6 rounded-xl shadow-sm lg:col-span-1 border border-gray-200">
                 <h3 class="text-lg font-bold text-gray-800 mb-4 uppercase tracking-wide">Platform Split (Active)</h3>
                 <div class="relative h-64">
@@ -65,7 +65,8 @@
             </div>
 
             <div class="bg-white p-6 rounded-xl shadow-sm lg:col-span-2 border border-gray-200">
-                <h3 class="text-lg font-bold text-gray-800 mb-4 uppercase tracking-wide">Staff Leaderboard (Today's Actions)</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-4 uppercase tracking-wide">Staff Leaderboard (Today's
+                    Actions)</h3>
                 <div class="relative h-64 w-full">
                     <canvas id="staffChart"></canvas>
                 </div>
@@ -74,8 +75,10 @@
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">
-                <h3 class="text-lg font-bold text-red-800 uppercase tracking-wide">🚨 Dead Stock Hitlist (Return to Sender)</h3>
-                <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow">Requires Action</span>
+                <h3 class="text-lg font-bold text-red-800 uppercase tracking-wide">🚨 Dead Stock Hitlist (Return to
+                    Sender)</h3>
+                <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow">Requires
+                    Action</span>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
@@ -90,7 +93,8 @@
                     </thead>
                     <tbody id="deadStockTableBody" class="divide-y divide-gray-100">
                         <tr>
-                            <td colspan="5" class="p-8 text-center text-gray-400 font-bold italic">Loading dead stock data...</td>
+                            <td colspan="5" class="p-8 text-center text-gray-400 font-bold italic">Loading dead stock
+                                data...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -148,7 +152,7 @@
         const staffChart = new Chart(staffCtx, {
             type: 'bar',
             data: {
-                labels: [], 
+                labels: [],
                 datasets: [
                     {
                         label: 'Inbound Scans',
@@ -174,7 +178,7 @@
             }
         });
 
-        // --- 4. REAL-TIME DATA ENGINE ---
+        // --- 4. REAL-TIME DATA ENGINE (UPGRADED) ---
         function startAdminSync() {
             // Get midnight of the current day for "Today" filters
             const startOfToday = new Date();
@@ -184,10 +188,19 @@
             // Dead stock threshold: 5 days ago
             const fiveDaysAgo = Date.now() - (5 * 24 * 60 * 60 * 1000);
 
+            // Variables to hold both halves of today's total inbound equation
+            let activeInboundToday = 0;
+            let collectedInboundToday = 0;
+
+            function updateInboundUI() {
+                // The true total: parcels still on the shelf + parcels already collected
+                document.getElementById('kpi-inbound-today').textContent = activeInboundToday + collectedInboundToday;
+            }
+
             // ACTIVE INVENTORY LISTENER
             db.collection("active_parcels").onSnapshot((snapshot) => {
                 let totalActive = 0;
-                let inboundToday = 0;
+                activeInboundToday = 0; // Reset for recalculation
                 let spxCount = 0;
                 let yoyiCount = 0;
                 let deadStock = [];
@@ -201,9 +214,9 @@
                     const isYoyi = data.full_awb.startsWith('680');
                     if (isYoyi) yoyiCount++; else spxCount++;
 
-                    // Today's Inbound Math & Staff Tracking
+                    // Today's Inbound Math (Items still on shelf)
                     if (data.timestamp >= todayTimestamp) {
-                        inboundToday++;
+                        activeInboundToday++;
                         const staff = data.scannedBy || 'Unknown';
                         staffInboundMap[staff] = (staffInboundMap[staff] || 0) + 1;
                     }
@@ -216,7 +229,6 @@
 
                 // Update KPIs
                 document.getElementById('kpi-total-active').textContent = totalActive;
-                document.getElementById('kpi-inbound-today').textContent = inboundToday;
                 document.getElementById('kpi-dead-stock').textContent = deadStock.length;
 
                 // Update Platform Doughnut Chart
@@ -227,44 +239,62 @@
 
                 // Render Dead Stock Table
                 renderDeadStockTable(deadStock.sort((a, b) => a.timestamp - b.timestamp));
-                
-                // Triggers staff chart update (Needs to merge with outbound data, handled via variable scope in a real app, but we will just pass it to a master renderer here)
-                window.latestStaffInbound = staffInboundMap;
+
+                window.latestStaffActiveInbound = staffInboundMap;
+                updateInboundUI(); // Update the big number
                 renderStaffChart();
             });
 
-            // OUTBOUND HISTORY LISTENER (Limited to recent to save reads)
+            // OUTBOUND HISTORY LISTENER
             db.collection("collected_parcels")
-              .where("collectedAt", ">=", todayTimestamp)
-              .onSnapshot((snapshot) => {
-                let outboundToday = 0;
-                let staffOutboundMap = {};
+                .where("collectedAt", ">=", todayTimestamp)
+                .onSnapshot((snapshot) => {
+                    let outboundToday = 0;
+                    collectedInboundToday = 0; // Reset for recalculation
+                    let staffOutboundMap = {};
+                    let staffCollectedInboundMap = {};
 
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    outboundToday++;
-                    const staff = data.collectedBy || 'Unknown';
-                    staffOutboundMap[staff] = (staffOutboundMap[staff] || 0) + 1;
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        outboundToday++;
+
+                        const collector = data.collectedBy || 'Unknown';
+                        staffOutboundMap[collector] = (staffOutboundMap[collector] || 0) + 1;
+
+                        // THE FIX: Did this parcel arrive today AND leave today?
+                        if (data.timestamp >= todayTimestamp) {
+                            collectedInboundToday++;
+                            const scanner = data.scannedBy || 'Unknown';
+                            staffCollectedInboundMap[scanner] = (staffCollectedInboundMap[scanner] || 0) + 1;
+                        }
+                    });
+
+                    document.getElementById('kpi-outbound-today').textContent = outboundToday;
+
+                    window.latestStaffOutbound = staffOutboundMap;
+                    window.latestStaffCollectedInbound = staffCollectedInboundMap;
+
+                    updateInboundUI(); // Update the big number
+                    renderStaffChart();
                 });
-
-                document.getElementById('kpi-outbound-today').textContent = outboundToday;
-                
-                window.latestStaffOutbound = staffOutboundMap;
-                renderStaffChart();
-            });
         }
 
         // --- 5. RENDERERS ---
         function renderStaffChart() {
-            const inboundData = window.latestStaffInbound || {};
+            const activeInbound = window.latestStaffActiveInbound || {};
+            const collectedInbound = window.latestStaffCollectedInbound || {};
             const outboundData = window.latestStaffOutbound || {};
-            
-            // Get a unique list of all staff names from both maps
-            const allStaff = new Set([...Object.keys(inboundData), ...Object.keys(outboundData)]);
-            // Filter out default/empty Admin noise if you want, but leaving it shows everything
+
+            // Merge the inbound numbers so staff get full credit on the chart even if it was collected!
+            let totalInboundData = {};
+            [...Object.keys(activeInbound), ...Object.keys(collectedInbound)].forEach(name => {
+                totalInboundData[name] = (activeInbound[name] || 0) + (collectedInbound[name] || 0);
+            });
+
+            const allStaff = new Set([...Object.keys(totalInboundData), ...Object.keys(outboundData)]);
             const staffLabels = Array.from(allStaff).sort();
 
-            const inboundTally = staffLabels.map(name => inboundData[name] || 0);
+            const inboundTally = staffLabels.map(name => totalInboundData[name] || 0);
             const outboundTally = staffLabels.map(name => outboundData[name] || 0);
 
             staffChart.data.labels = staffLabels;
@@ -275,7 +305,7 @@
 
         function renderDeadStockTable(deadStock) {
             const tbody = document.getElementById('deadStockTableBody');
-            
+
             if (deadStock.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-green-600 font-bold text-lg">No dead stock! Racks are healthy. 🚀</td></tr>`;
                 return;
@@ -284,8 +314,8 @@
             let html = '';
             deadStock.forEach(p => {
                 const daysOld = Math.floor((Date.now() - p.timestamp) / (1000 * 60 * 60 * 24));
-                const platformBadge = p.full_awb.startsWith('680') 
-                    ? '<span class="bg-green-100 text-green-800 text-[10px] px-2 py-0.5 rounded font-black ml-2 align-top uppercase">YOYI</span>' 
+                const platformBadge = p.full_awb.startsWith('680')
+                    ? '<span class="bg-green-100 text-green-800 text-[10px] px-2 py-0.5 rounded font-black ml-2 align-top uppercase">YOYI</span>'
                     : '<span class="bg-orange-100 text-orange-800 text-[10px] px-2 py-0.5 rounded font-black ml-2 align-top uppercase">SPX</span>';
 
                 html += `
