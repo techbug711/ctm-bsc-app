@@ -1,0 +1,5 @@
+2026/06/13-14:59:27.419 42bc Creating DB C:\Users\User\OneDrive\Desktop\CollectCo-WMS\yoyiscraper\yoyi-session-profile\Default\Local Storage\leveldb since it was missing.
+2026/06/13-14:59:27.458 42bc Reusing MANIFEST C:\Users\User\OneDrive\Desktop\CollectCo-WMS\yoyiscraper\yoyi-session-profile\Default\Local Storage\leveldb/MANIFEST-000001
+2026/06/13-15:00:27.484 bdb0 Level-0 table #5: started
+2026/06/13-15:00:27.492 bdb0 Level-0 table #5: 252062 bytes OK
+2026/06/13-15:00:27.495 bdb0 Delete type=0 #3

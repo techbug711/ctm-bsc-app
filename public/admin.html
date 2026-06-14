@@ -40,13 +40,49 @@
                 <p id="kpi-outbound-today" class="text-5xl font-black text-gray-800 mt-2">0</p>
             </div>
             <div class="bg-white p-6 rounded-xl border-l-8 border-red-500 shadow-sm flex flex-col justify-center">
-                <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Dead Stock (5+ Days)</p>
+                <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Dead Stock (> T+5 Days)</p>
                 <p id="kpi-dead-stock" class="text-5xl font-black text-red-600 mt-2">0</p>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="bg-gray-50 p-4 border-b border-gray-100">
+                <h3 class="text-lg font-bold text-gray-700 uppercase tracking-wide">📦 Periodic Volume Tracking Matrix
+                </h3>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                <div class="p-6 flex flex-col justify-between">
+                    <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Today (24 Hours)</p>
+                    <div class="space-y-1">
+                        <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-day"
+                                class="text-green-600 font-black">0</span></p>
+                        <p class="text-lg font-bold text-gray-700">Outbound: <span id="matrix-out-day"
+                                class="text-purple-600 font-black">0</span></p>
+                    </div>
+                </div>
+                <div class="p-6 flex flex-col justify-between">
+                    <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">This Week (Last 7 Days)</p>
+                    <div class="space-y-1">
+                        <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-week"
+                                class="text-green-600 font-black">0</span></p>
+                        <p class="text-lg font-bold text-gray-700">Outbound: <span id="matrix-out-week"
+                                class="text-purple-600 font-black">0</span></p>
+                    </div>
+                </div>
+                <div class="p-6 flex flex-col justify-between">
+                    <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">This Month (Last 30 Days)
+                    </p>
+                    <div class="space-y-1">
+                        <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-month"
+                                class="text-green-600 font-black">0</span></p>
+                        <p class="text-lg font-bold text-gray-700">Outbound: <span id="matrix-out-month"
+                                class="text-purple-600 font-black">0</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div class="bg-white p-6 rounded-xl shadow-sm lg:col-span-1 border border-gray-200">
                 <h3 class="text-lg font-bold text-gray-800 mb-4 uppercase tracking-wide">Platform Split (Active)</h3>
                 <div class="relative h-64">
@@ -75,8 +111,8 @@
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">
-                <h3 class="text-lg font-bold text-red-800 uppercase tracking-wide">🚨 Dead Stock Hitlist (Return to
-                    Sender)</h3>
+                <h3 class="text-lg font-bold text-red-800 uppercase tracking-wide">🚨 Dead Stock Hitlist (> T+5 Days
+                    Old)</h3>
                 <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow">Requires
                     Action</span>
             </div>
@@ -84,7 +120,7 @@
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b">
-                            <th class="p-4 font-bold">Days Old</th>
+                            <th class="p-4 font-bold">Days on Shelf</th>
                             <th class="p-4 font-bold">Location</th>
                             <th class="p-4 font-bold">Tracking Number</th>
                             <th class="p-4 font-bold">Customer Name</th>
@@ -136,7 +172,7 @@
                 labels: ['SPX', 'YOYI'],
                 datasets: [{
                     data: [0, 0],
-                    backgroundColor: ['#f97316', '#22c55e'], // Tailwind Orange-500, Green-500
+                    backgroundColor: ['#f97316', '#22c55e'],
                     borderWidth: 0,
                     hoverOffset: 4
                 }]
@@ -157,13 +193,13 @@
                     {
                         label: 'Inbound Scans',
                         data: [],
-                        backgroundColor: '#3b82f6', // Blue
+                        backgroundColor: '#3b82f6',
                         borderRadius: 4
                     },
                     {
                         label: 'Outbound Collections',
                         data: [],
-                        backgroundColor: '#8b5cf6', // Purple
+                        backgroundColor: '#8b5cf6',
                         borderRadius: 4
                     }
                 ]
@@ -178,105 +214,143 @@
             }
         });
 
-        // --- 4. REAL-TIME DATA ENGINE (UPGRADED) ---
+        // --- 4. ENGINE SYNCHRONIZATION ---
         function startAdminSync() {
-            // Get midnight of the current day for "Today" filters
+            const nowMs = Date.now();
+
+            // Generate periodic window ranges
             const startOfToday = new Date();
             startOfToday.setHours(0, 0, 0, 0);
-            const todayTimestamp = startOfToday.getTime();
+            const dailyThreshold = startOfToday.getTime();
+            const weeklyThreshold = nowMs - (7 * 24 * 60 * 60 * 1000);
+            const monthlyThreshold = nowMs - (30 * 24 * 60 * 60 * 1000);
 
-            // Dead stock threshold: 5 days ago
-            const fiveDaysAgo = Date.now() - (5 * 24 * 60 * 60 * 1000);
+            // CORRECTION: T+5 structure. If day of inbound is T+0, then T+5 is exactly 5 days old.
+            // Items *more than* T+5 must be strictly older than 5 days.
+            const deadStockThreshold = nowMs - (5 * 24 * 60 * 60 * 1000);
 
-            // Variables to hold both halves of today's total inbound equation
             let activeInboundToday = 0;
             let collectedInboundToday = 0;
 
-            function updateInboundUI() {
-                // The true total: parcels still on the shelf + parcels already collected
+            function updateInboundKPI() {
                 document.getElementById('kpi-inbound-today').textContent = activeInboundToday + collectedInboundToday;
+                document.getElementById('matrix-in-day').textContent = activeInboundToday + collectedInboundToday;
             }
 
             // ACTIVE INVENTORY LISTENER
             db.collection("active_parcels").onSnapshot((snapshot) => {
                 let totalActive = 0;
-                activeInboundToday = 0; // Reset for recalculation
+                activeInboundToday = 0;
+                let activeInboundWeek = 0;
+                let activeInboundMonth = 0;
+
                 let spxCount = 0;
                 let yoyiCount = 0;
-                let deadStock = [];
+                let deadStockList = [];
                 let staffInboundMap = {};
 
                 snapshot.forEach(doc => {
                     const data = doc.data();
                     totalActive++;
 
-                    // Platform Split Math
                     const isYoyi = data.full_awb.startsWith('680');
                     if (isYoyi) yoyiCount++; else spxCount++;
 
-                    // Today's Inbound Math (Items still on shelf)
-                    if (data.timestamp >= todayTimestamp) {
+                    // Inbound filtering via historical timestamps
+                    if (data.timestamp >= dailyThreshold) {
                         activeInboundToday++;
                         const staff = data.scannedBy || 'Unknown';
                         staffInboundMap[staff] = (staffInboundMap[staff] || 0) + 1;
                     }
+                    if (data.timestamp >= weeklyThreshold) activeInboundWeek++;
+                    if (data.timestamp >= monthlyThreshold) activeInboundMonth++;
 
-                    // Dead Stock Math
-                    if (data.timestamp < fiveDaysAgo) {
-                        deadStock.push(data);
+                    // T+5 Evaluation: Timestamp is older than the 5-day cutoff threshold
+                    if (data.timestamp < deadStockThreshold) {
+                        deadStockList.push(data);
                     }
                 });
 
-                // Update KPIs
                 document.getElementById('kpi-total-active').textContent = totalActive;
-                document.getElementById('kpi-dead-stock').textContent = deadStock.length;
+                document.getElementById('kpi-dead-stock').textContent = deadStockList.length;
 
-                // Update Platform Doughnut Chart
                 document.getElementById('stat-spx').textContent = spxCount;
                 document.getElementById('stat-yoyi').textContent = yoyiCount;
                 platformChart.data.datasets[0].data = [spxCount, yoyiCount];
                 platformChart.update();
 
-                // Render Dead Stock Table
-                renderDeadStockTable(deadStock.sort((a, b) => a.timestamp - b.timestamp));
+                renderDeadStockTable(deadStockList.sort((a, b) => a.timestamp - b.timestamp));
 
                 window.latestStaffActiveInbound = staffInboundMap;
-                updateInboundUI(); // Update the big number
+                window.activeInboundWeek = activeInboundWeek;
+                window.activeInboundMonth = activeInboundMonth;
+
+                updateInboundKPI();
+                calculateMatrixTotals();
                 renderStaffChart();
             });
 
-            // OUTBOUND HISTORY LISTENER
+            // OUTBOUND SUMMARY LISTENER (Pulls up to 30 days to compute matrix counts efficiently)
             db.collection("collected_parcels")
-                .where("collectedAt", ">=", todayTimestamp)
+                .where("collectedAt", ">=", monthlyThreshold)
                 .onSnapshot((snapshot) => {
                     let outboundToday = 0;
-                    collectedInboundToday = 0; // Reset for recalculation
+                    let outboundWeek = 0;
+                    let outboundMonth = 0;
+
+                    collectedInboundToday = 0;
+                    let collectedInboundWeek = 0;
+                    let collectedInboundMonth = 0;
+
                     let staffOutboundMap = {};
                     let staffCollectedInboundMap = {};
 
                     snapshot.forEach(doc => {
                         const data = doc.data();
-                        outboundToday++;
 
-                        const collector = data.collectedBy || 'Unknown';
-                        staffOutboundMap[collector] = (staffOutboundMap[collector] || 0) + 1;
+                        // Outbound Counter Windows
+                        if (data.collectedAt >= dailyThreshold) {
+                            outboundToday++;
+                            const collector = data.collectedBy || 'Unknown';
+                            staffOutboundMap[collector] = (staffOutboundMap[collector] || 0) + 1;
+                        }
+                        if (data.collectedAt >= weeklyThreshold) outboundWeek++;
+                        if (data.collectedAt >= monthlyThreshold) outboundMonth++;
 
-                        // THE FIX: Did this parcel arrive today AND leave today?
-                        if (data.timestamp >= todayTimestamp) {
+                        // Intersecting Inbound Windows (Parcels scanned and checked out inside identical frames)
+                        if (data.timestamp >= dailyThreshold) {
                             collectedInboundToday++;
                             const scanner = data.scannedBy || 'Unknown';
                             staffCollectedInboundMap[scanner] = (staffCollectedInboundMap[scanner] || 0) + 1;
                         }
+                        if (data.timestamp >= weeklyThreshold) collectedInboundWeek++;
+                        if (data.timestamp >= monthlyThreshold) collectedInboundMonth++;
                     });
 
                     document.getElementById('kpi-outbound-today').textContent = outboundToday;
+                    document.getElementById('matrix-out-day').textContent = outboundToday;
+                    document.getElementById('matrix-out-week').textContent = outboundWeek;
+                    document.getElementById('matrix-out-month').textContent = outboundMonth;
 
                     window.latestStaffOutbound = staffOutboundMap;
                     window.latestStaffCollectedInbound = staffCollectedInboundMap;
+                    window.collectedInboundWeek = collectedInboundWeek;
+                    window.collectedInboundMonth = collectedInboundMonth;
 
-                    updateInboundUI(); // Update the big number
+                    updateInboundKPI();
+                    calculateMatrixTotals();
                     renderStaffChart();
                 });
+        }
+
+        function calculateMatrixTotals() {
+            const activeW = window.activeInboundWeek || 0;
+            const collW = window.collectedInboundWeek || 0;
+            const activeM = window.activeInboundMonth || 0;
+            const collM = window.collectedInboundMonth || 0;
+
+            document.getElementById('matrix-in-week').textContent = activeW + collW;
+            document.getElementById('matrix-in-month').textContent = activeM + collM;
         }
 
         // --- 5. RENDERERS ---
@@ -285,7 +359,6 @@
             const collectedInbound = window.latestStaffCollectedInbound || {};
             const outboundData = window.latestStaffOutbound || {};
 
-            // Merge the inbound numbers so staff get full credit on the chart even if it was collected!
             let totalInboundData = {};
             [...Object.keys(activeInbound), ...Object.keys(collectedInbound)].forEach(name => {
                 totalInboundData[name] = (activeInbound[name] || 0) + (collectedInbound[name] || 0);
@@ -321,7 +394,7 @@
                 html += `
                     <tr class="hover:bg-gray-50 transition">
                         <td class="p-4">
-                            <span class="bg-red-100 text-red-800 font-black px-3 py-1 rounded-lg">${daysOld} Days</span>
+                            <span class="bg-red-100 text-red-800 font-black px-3 py-1 rounded-lg">T+${daysOld}</span>
                         </td>
                         <td class="p-4 text-2xl font-black text-blue-700">${p.location}</td>
                         <td class="p-4 font-bold text-gray-800 select-all">${p.full_awb} ${platformBadge}</td>
@@ -333,9 +406,7 @@
             tbody.innerHTML = html;
         }
 
-        // Boot the engine
         startAdminSync();
-
     </script>
 </body>
 
