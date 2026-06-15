@@ -1065,15 +1065,15 @@
                     : `<p class="text-sm font-bold text-gray-400 mb-2 italic">No name data yet</p>`;
 
                 resultsHTML += `
-                    <div class="bg-gray-50 border-2 border-gray-300 p-6 rounded-lg flex justify-between items-center" id="card-${docId}">
-                        <div class="overflow-hidden">
+                    <div class="bg-gray-50 border-2 border-gray-300 p-4 md:p-6 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4" id="card-${docId}">
+                        <div class="w-full overflow-hidden">
                             ${customerDisplay}
-                            <p class="text-sm text-gray-500 font-bold uppercase tracking-wider mt-1">
-                                Tracking: <span class="text-gray-900 font-black text-lg select-all">${displayAwb}</span>${platformBadge}
+                            <p class="text-sm text-gray-500 font-bold uppercase tracking-wider mt-1 break-words">
+                                Tracking: <span class="text-gray-900 font-black text-lg select-all break-all">${displayAwb}</span>${platformBadge}
                             </p>
                             <p class="text-3xl md:text-4xl font-black text-blue-700 mt-2">${data.location}</p>
                         </div>
-                        <button onclick="markCollected('${docId}')" class="bg-blue-600 text-white px-6 md:px-8 py-4 rounded-lg text-xl md:text-2xl font-bold hover:bg-blue-700 shadow-md transition ml-4 shrink-0">
+                        <button onclick="markCollected('${docId}')" class="bg-blue-600 text-white px-6 md:px-8 py-4 rounded-lg text-xl md:text-2xl font-bold hover:bg-blue-700 shadow-md transition w-full md:w-auto flex-shrink-0">
                             Collect
                         </button>
                     </div>
