@@ -1180,8 +1180,31 @@
 
                     currentDisplayedIds = currentDisplayedIds.filter(id => id !== awbId);
 
+                    // --- THE FIX: Instantly kill the specific search tag associated with this parcel ---
+                    if (data && data._matchedQuery) {
+                        const query = data._matchedQuery;
+                        if (searchQueries.includes(query)) {
+                            // Remove it from the active queries array
+                            searchQueries = searchQueries.filter(q => q !== query);
+
+                            // Re-draw the tag area to instantly make the purple tag vanish
+                            tagArea.innerHTML = '';
+                            searchQueries.forEach(q => {
+                                const tag = document.createElement('div');
+                                tag.className = 'tag text-2xl';
+                                tag.innerHTML = `${q} <span onclick="removeTag(this, '${q}')" class="ml-2">✖</span>`;
+                                tagArea.appendChild(tag);
+                            });
+
+                            if (searchQueries.length === 0) searchDbBtn.classList.add('hidden');
+                        }
+                    }
+                    // -----------------------------------------------------------------------------------
+
                     if (currentDisplayedIds.length <= 1) collectAllBtn.classList.add('hidden');
+
                     if (resultsArea.children.length === 0) {
+                        // The 1.5s delay you like remains perfectly intact here
                         resultsArea.innerHTML = '<p class="text-green-600 text-2xl font-bold text-center mt-8">✅ All parcels collected.</p>';
                         setTimeout(clearSearch, 1500);
                     }
