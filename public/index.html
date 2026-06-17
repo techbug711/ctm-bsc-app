@@ -8,6 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
     <style>
@@ -42,6 +43,7 @@
 </head>
 
 <body class="bg-gray-100 p-2 md:p-8 font-sans">
+
     <div id="lockout-screen"
         class="fixed inset-0 bg-gray-900 bg-opacity-95 z-[9999] flex flex-col items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl border-t-8 border-red-600">
@@ -59,8 +61,24 @@
         </div>
     </div>
 
-    <div id="main-app">
-        <div id="section-login" class="max-w-md mx-auto bg-white rounded-xl shadow-lg p-8 mt-10 text-center">
+    <div id="saas-app">
+
+        <div id="section-auth" class="max-w-md mx-auto bg-white rounded-xl shadow-lg p-8 mt-10 text-center hidden">
+            <h1 class="text-3xl font-black text-blue-700 mb-2">PUDO WMS</h1>
+            <p class="text-gray-500 font-bold mb-8">Secure Workspace Authentication</p>
+
+            <input type="email" id="authEmail" placeholder="Workspace Email"
+                class="w-full p-4 mb-4 border-2 border-gray-300 rounded-lg text-lg font-bold focus:border-blue-500 outline-none">
+            <input type="password" id="authPassword" placeholder="Password"
+                class="w-full p-4 mb-6 border-2 border-gray-300 rounded-lg text-lg font-bold focus:border-blue-500 outline-none">
+
+            <button onclick="loginMasterDevice()"
+                class="w-full bg-blue-800 text-white font-black py-4 text-xl rounded-lg hover:bg-blue-900 transition shadow-md">
+                🔒 Unlock Workspace
+            </button>
+        </div>
+
+        <div id="section-login" class="max-w-md mx-auto bg-white rounded-xl shadow-lg p-8 mt-10 text-center hidden">
             <h1 class="text-3xl font-black text-blue-700 mb-2">PUDO WMS</h1>
             <p class="text-gray-500 font-bold mb-8">Select your shift profile</p>
 
@@ -86,44 +104,36 @@
                     ⚙️ Admin Login
                 </button>
             </div>
+
+            <button onclick="lockMasterDevice()" class="mt-8 text-sm text-red-500 font-bold hover:underline transition">
+                🔒 Lock Master Workspace
+            </button>
         </div>
 
-        <div id="main-app" class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden hidden">
+        <div id="wms-ui" class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden hidden">
 
             <div class="bg-gray-800 text-white p-4 flex justify-between items-center">
                 <p class="font-bold">Shift: <span id="currentUserDisplay"
-                        class="text-yellow-400 font-black">Admin</span>
-                </p>
+                        class="text-yellow-400 font-black">Admin</span></p>
                 <button onclick="logout()"
-                    class="text-sm bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded transition">Log
-                    Out</button>
+                    class="text-sm bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded transition">End Shift</button>
             </div>
 
             <div class="flex border-b border-gray-200 bg-white">
                 <button id="tab-inbound" class="flex-1 py-3 text-center tab-active text-sm md:text-lg transition"
-                    onclick="switchTab('inbound')">
-                    📥 IN
-                </button>
+                    onclick="switchTab('inbound')">📥 IN</button>
                 <button id="tab-outbound"
                     class="flex-1 py-3 text-center text-gray-500 text-sm md:text-lg hover:bg-gray-50 transition"
-                    onclick="switchTab('outbound')">
-                    📤 OUT
-                </button>
+                    onclick="switchTab('outbound')">📤 OUT</button>
                 <button id="tab-inventory"
                     class="flex-1 py-3 text-center text-gray-500 text-sm md:text-lg hover:bg-gray-50 transition"
-                    onclick="switchTab('inventory')">
-                    📊 STOCK
-                </button>
+                    onclick="switchTab('inventory')">📊 STOCK</button>
                 <button id="tab-bulk"
                     class="flex-1 py-3 text-center text-gray-500 text-sm md:text-lg hover:bg-gray-50 transition"
-                    onclick="switchTab('bulk')">
-                    🗂️ MULTI
-                </button>
+                    onclick="switchTab('bulk')">🗂️ MULTI</button>
                 <button id="tab-history"
                     class="flex-1 py-3 text-center text-gray-500 text-sm md:text-lg hover:bg-gray-50 transition"
-                    onclick="switchTab('history')">
-                    📜 HIST
-                </button>
+                    onclick="switchTab('history')">📜 HIST</button>
             </div>
 
             <div id="section-inbound" class="p-4 md:p-8">
@@ -302,13 +312,11 @@
             // --- SAAS GATEKEEPER ---
             let currentShopId = null;
             let currentShopTier = 'basic';
-            let shopDB = null; // The dynamic database path
+            let shopDB = null;
 
             function initializeSaaS() {
                 const urlParams = new URLSearchParams(window.location.search);
-                // MAGIC TRICK: If no ?shop= is in the URL, it defaults perfectly back to your shop!
                 currentShopId = urlParams.get('shop') || 'ctm_melewar';
-
                 shopDB = db.collection("shops").doc(currentShopId);
 
                 shopDB.get().then((doc) => {
@@ -316,35 +324,66 @@
                         const shopData = doc.data();
                         const currentTime = Date.now();
 
-                        // 1. Check for Payment / Expiry Lockout
-                        // Safely convert Firestore Timestamp to milliseconds (with a fallback just in case)
+                        // FIX: Safely parse Firebase Timestamp vs raw number
                         const expiryTimeMs = shopData.expiryDate.toMillis ? shopData.expiryDate.toMillis() : shopData.expiryDate;
 
+                        // Lockout Evaluation
                         if (shopData.status !== 'active' || currentTime > expiryTimeMs) {
                             document.getElementById('lockout-screen').classList.remove('hidden');
-                            document.getElementById('main-app').classList.add('hidden');
-                            return; // HALT EXECUTION - DO NOT LOAD PARCELS
+                            document.getElementById('saas-app').classList.add('hidden');
+                            return;
                         }
 
-                        // 2. Set Up the Workspace
                         currentShopTier = shopData.tier;
                         document.title = `${shopData.shopName} - PUDO WMS`;
 
-                        // 3. Enforce Package Gating (Hide Multi-Parcel if on Basic)
                         if (currentShopTier === 'basic') {
                             const multiTab = document.getElementById('tab-bulk');
                             if (multiTab) multiTab.classList.add('hidden');
                         }
 
-                        // 4. Mark workspace as ready (Real-time sync starts upon PIN login)
-                        console.log("SaaS Workspace Authenticated:", currentShopId);
-
+                        console.log("Gatekeeper passed. Waiting for Auth verification...");
                     } else {
                         alert("System Error: Unregistered Workspace ID.");
                     }
-                }).catch(error => {
-                    console.error("Failed to authenticate workspace:", error);
-                });
+                }).catch(error => console.error("Failed to authenticate workspace:", error));
+            }
+
+            // --- FIREBASE AUTH MASTER LISTENER ---
+            firebase.auth().onAuthStateChanged((user) => {
+                if (user) {
+                    // Device is unlocked cryptographically
+                    document.getElementById('section-auth').classList.add('hidden');
+
+                    if (!currentUser) {
+                        // Show PIN screen for staff
+                        document.getElementById('section-login').classList.remove('hidden');
+                        document.getElementById('wms-ui').classList.add('hidden');
+                    }
+                } else {
+                    // Device is locked/logged out
+                    document.getElementById('section-auth').classList.remove('hidden');
+                    document.getElementById('section-login').classList.add('hidden');
+                    document.getElementById('wms-ui').classList.add('hidden');
+                }
+            });
+
+            function loginMasterDevice() {
+                const email = document.getElementById('authEmail').value;
+                const pass = document.getElementById('authPassword').value;
+                firebase.auth().signInWithEmailAndPassword(email, pass)
+                    .then(() => {
+                        console.log("Workspace Master Unlocked.");
+                    })
+                    .catch(error => {
+                        alert("Authentication Failed: " + error.message);
+                    });
+            }
+
+            function lockMasterDevice() {
+                if (confirm("Lock this device? You will need the master email and password to scan parcels again.")) {
+                    firebase.auth().signOut();
+                }
             }
 
             let currentUser = null;
@@ -355,11 +394,9 @@
             let currentInventoryFilter = 'ALL';
             let allHistoryData = [];
 
-            // --- 2. REAL-TIME FIREBASE LISTENER (ISOLATED WORKSPACE) ---
+            // --- REAL-TIME DATABASE SYNC ---
             function startRealTimeSync() {
                 console.log("📡 Starting real-time sync with shelves...");
-
-                // SAAS CHANGE: Listening only to shopDB
                 shopDB.collection("active_parcels").onSnapshot((snapshot) => {
                     let parcels = [];
                     snapshot.forEach(doc => {
@@ -370,28 +407,20 @@
 
                     allInventoryData = parcels.sort((a, b) => a.location.localeCompare(b.location, undefined, { numeric: true, sensitivity: 'base' }));
 
-                    if (!document.getElementById('section-inventory').classList.contains('hidden')) {
-                        loadInventory();
-                    }
-                    if (!document.getElementById('section-bulk').classList.contains('hidden')) {
-                        loadBulkTab();
-                    }
-                    if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) {
-                        executeLocalSearch();
-                    }
-                }, (error) => {
-                    console.error("Firebase Sync Error: ", error);
-                });
+                    if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
+                    if (!document.getElementById('section-bulk').classList.contains('hidden')) loadBulkTab();
+                    if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
+                }, (error) => console.error("Firebase Sync Error: ", error));
             }
 
-            // --- 3. SHIFT LOGIN LOGIC ---
+            // --- SHIFT LOGIN LOGIC ---
             function loginWithPin(name, correctPin) {
                 const enteredPin = prompt(`Enter PIN for ${name}:`);
                 if (enteredPin === correctPin) {
                     currentUser = name;
                     document.getElementById('currentUserDisplay').textContent = name;
                     document.getElementById('section-login').classList.add('hidden');
-                    document.getElementById('main-app').classList.remove('hidden');
+                    document.getElementById('wms-ui').classList.remove('hidden');
                     refreshSlotData();
                     startRealTimeSync();
                     if (!isTouchDevice) document.getElementById('awbInput').focus();
@@ -402,10 +431,11 @@
 
             function logout() {
                 currentUser = null;
-                document.getElementById('main-app').classList.add('hidden');
+                document.getElementById('wms-ui').classList.add('hidden');
                 document.getElementById('section-login').classList.remove('hidden');
                 clearSearch();
                 document.getElementById('inboundStatus').classList.add('hidden');
+
                 if (isCameraActive && html5QrCode) {
                     html5QrCode.stop().then(() => {
                         isCameraActive = false;
@@ -417,12 +447,11 @@
                 }
             }
 
-            // --- 4. ADVANCED AUDIO ENGINE ---
+            // --- AUDIO ENGINE ---
             function playSuccessBeep() {
                 const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
                 audio.play().catch(e => console.log(e));
             }
-
             function playDuplicateBuzzer() {
                 try {
                     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -434,11 +463,9 @@
                     gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
                     osc.connect(gainNode);
                     gainNode.connect(audioCtx.destination);
-                    osc.start();
-                    osc.stop(audioCtx.currentTime + 0.6);
-                } catch (e) { console.log(e); }
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.6);
+                } catch (e) { }
             }
-
             function playInvalidBuzzer() {
                 try {
                     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -451,11 +478,9 @@
                     gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
                     osc.connect(gainNode);
                     gainNode.connect(audioCtx.destination);
-                    osc.start();
-                    osc.stop(audioCtx.currentTime + 0.4);
-                } catch (e) { console.log(e); }
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+                } catch (e) { }
             }
-
             function playSlotFullChime() {
                 try {
                     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -466,19 +491,15 @@
                         osc.frequency.setValueAtTime(freq, startTime);
                         gainNode.gain.setValueAtTime(1.0, startTime);
                         gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
-                        osc.connect(gainNode);
-                        gainNode.connect(audioCtx.destination);
-                        osc.start(startTime);
-                        osc.stop(startTime + 0.3);
+                        osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+                        osc.start(startTime); osc.stop(startTime + 0.3);
                     }
                     const now = audioCtx.currentTime;
-                    playNote(880.00, now);
-                    playNote(1108.73, now + 0.15);
-                    playNote(1318.51, now + 0.30);
-                } catch (e) { console.log(e); }
+                    playNote(880.00, now); playNote(1108.73, now + 0.15); playNote(1318.51, now + 0.30);
+                } catch (e) { }
             }
 
-            // --- 5. TAB SWITCHING LOGIC ---
+            // --- TABS ---
             function switchTab(tab) {
                 const tabs = ['inbound', 'outbound', 'inventory', 'bulk', 'history'];
                 tabs.forEach(t => {
@@ -499,16 +520,14 @@
                     document.getElementById('inventorySearchInput').value = '';
                     loadInventory();
                 }
-                if (tab === 'bulk') {
-                    loadBulkTab();
-                }
+                if (tab === 'bulk') loadBulkTab();
                 if (tab === 'history') {
                     document.getElementById('historySearchInput').value = '';
                     loadHistory();
                 }
             }
 
-            // --- 6. INVENTORY DASHBOARD LOGIC ---
+            // --- INVENTORY DASHBOARD ---
             function setInventoryFilter(platform) {
                 currentInventoryFilter = platform;
                 const platforms = ['ALL', 'SPX', 'YOYI'];
@@ -535,12 +554,9 @@
                     return;
                 }
 
-                let spxCount = 0;
-                let yoyiCount = 0;
-
+                let spxCount = 0; let yoyiCount = 0;
                 allInventoryData.forEach(p => {
-                    if (p.full_awb.startsWith('680')) yoyiCount++;
-                    else spxCount++;
+                    if (p.full_awb.startsWith('680')) yoyiCount++; else spxCount++;
                 });
 
                 countDisplay.textContent = `Total: ${allInventoryData.length}`;
@@ -549,8 +565,7 @@
                     <div class="bg-orange-100 text-orange-800 px-2 py-2 rounded-lg font-black text-lg md:text-xl border-2 border-orange-200 shadow-sm flex-1 text-center">🟠 SPX: ${spxCount}</div>
                     <div class="bg-green-100 text-green-800 px-2 py-2 rounded-lg font-black text-lg md:text-xl border-2 border-green-200 shadow-sm flex-1 text-center">🟢 YOYI: ${yoyiCount}</div>
                 </div>
-            `;
-
+                `;
                 setInventoryFilter(currentInventoryFilter);
             }
 
@@ -620,7 +635,6 @@
                 }
                 if (confirm(`⚠️ WARNING: Move AWB ${awb} to the History trash?`)) {
                     try {
-                        // SAAS CHANGE: Listening only to shopDB
                         const docRef = shopDB.collection("active_parcels").doc(awb);
                         const snap = await docRef.get();
                         if (snap.exists) {
@@ -641,16 +655,12 @@
                 }
             }
 
-            // --- 7. HISTORY LOGIC ---
+            // --- HISTORY LOGIC ---
             async function loadHistory() {
                 const listDiv = document.getElementById('historyList');
                 listDiv.innerHTML = '<p class="text-center font-bold text-gray-500 py-8">Loading history...</p>';
                 try {
-                    // SAAS CHANGE: Listening only to shopDB
-                    const snapshot = await shopDB.collection("collected_parcels")
-                        .orderBy("collectedAt", "desc")
-                        .limit(50)
-                        .get();
+                    const snapshot = await shopDB.collection("collected_parcels").orderBy("collectedAt", "desc").limit(50).get();
 
                     if (snapshot.empty) {
                         listDiv.innerHTML = '<p class="text-center font-bold text-gray-500 py-8">No recent history found.</p>';
@@ -661,7 +671,6 @@
                     let parcels = [];
                     snapshot.forEach(doc => parcels.push(doc.data()));
                     allHistoryData = parcels;
-
                     renderHistoryList(parcels);
                 } catch (e) {
                     listDiv.innerHTML = `<p class="text-red-500 text-center font-bold">Error: ${e.message}</p>`;
@@ -706,7 +715,6 @@
             async function undoCollect(awbId) {
                 if (!confirm(`Return parcel ${awbId} back to the active shelves?`)) return;
                 try {
-                    // SAAS CHANGE: Listening only to shopDB
                     const docRef = shopDB.collection("collected_parcels").doc(awbId);
                     const docSnap = await docRef.get();
                     if (docSnap.exists) {
@@ -730,7 +738,7 @@
                 }
             }
 
-            // --- 8. INBOUND LOGIC ---
+            // --- INBOUND LOGIC ---
             const rackPrefix = document.getElementById('rackPrefix');
             const levelCounter = document.getElementById('levelCounter');
             const slotCounter = document.getElementById('slotCounter');
@@ -771,7 +779,6 @@
                 capacityDisplay.textContent = "Checking shelf data...";
 
                 try {
-                    // SAAS CHANGE: Listening only to shopDB
                     const snapshot = await shopDB.collection("active_parcels").where("location", "==", assignedLocation).get();
                     currentItemsInSlot = snapshot.size;
                     if (currentItemsInSlot >= parseInt(slotCapacity.value)) {
@@ -795,11 +802,8 @@
             slotCapacity.addEventListener('change', refreshSlotData);
 
             function manageFocusState(inputElement) {
-                if (isCameraActive) {
-                    inputElement.blur();
-                } else if (!isTouchDevice) {
-                    inputElement.focus();
-                }
+                if (isCameraActive) inputElement.blur();
+                else if (!isTouchDevice) inputElement.focus();
             }
 
             document.getElementById('inboundForm').addEventListener('submit', async (e) => {
@@ -810,34 +814,22 @@
 
                 let isValidFormat = false;
                 let invalidReason = "";
-
                 let cleanAwb = awb;
-                if (awb.startsWith("MY") && /[A-Z]$/.test(awb)) {
-                    cleanAwb = awb.slice(0, -1);
-                }
+                if (awb.startsWith("MY") && /[A-Z]$/.test(awb)) cleanAwb = awb.slice(0, -1);
 
                 let extractedLast4 = cleanAwb.slice(-4);
                 let extractedLast5 = cleanAwb.slice(-5);
                 let extractedLast6 = cleanAwb.slice(-6);
 
                 if (awb.startsWith("680")) {
-                    if (/^680\d{12}$/.test(awb)) {
-                        isValidFormat = true;
-                    } else {
-                        invalidReason = "YOYI tracking must be exactly 15 digits.";
-                    }
+                    if (/^680\d{12}$/.test(awb)) isValidFormat = true;
+                    else invalidReason = "YOYI tracking must be exactly 15 digits.";
                 } else if (awb.startsWith("SPXMY")) {
-                    if (/^SPXMY\d{12}$/.test(awb)) {
-                        isValidFormat = true;
-                    } else {
-                        invalidReason = "SPXMY tracking must be exactly 17 chars.";
-                    }
+                    if (/^SPXMY\d{12}$/.test(awb)) isValidFormat = true;
+                    else invalidReason = "SPXMY tracking must be exactly 17 chars.";
                 } else if (awb.startsWith("MY")) {
-                    if (/^MY\d{12,15}[A-Z]?$/.test(awb)) {
-                        isValidFormat = true;
-                    } else {
-                        invalidReason = "Invalid MY tracking format.";
-                    }
+                    if (/^MY\d{12,15}[A-Z]?$/.test(awb)) isValidFormat = true;
+                    else invalidReason = "Invalid MY tracking format.";
                 } else {
                     invalidReason = "Must start with 680, SPXMY, or MY.";
                 }
@@ -846,15 +838,13 @@
                     playInvalidBuzzer();
                     statusDiv.innerHTML = `⚠️ Invalid Barcode!<br><span class="text-xl">"${awb}"<br>${invalidReason}</span>`;
                     statusDiv.className = "mb-6 p-4 bg-orange-100 border-4 border-orange-500 text-2xl font-black text-center text-orange-800 rounded-lg block shadow-lg";
-                    awbInput.value = '';
-                    manageFocusState(awbInput);
+                    awbInput.value = ''; manageFocusState(awbInput);
                     return;
                 }
 
                 const assignedLocation = getAssignedLocation();
 
                 try {
-                    // SAAS CHANGE: Listening only to shopDB
                     const docRef = shopDB.collection("active_parcels").doc(awb);
                     const docSnap = await docRef.get();
 
@@ -863,8 +853,7 @@
                         const existingLocation = docSnap.data().location;
                         statusDiv.innerHTML = `🚨 DUPLICATE SCAN! 🚨<br><span class="text-2xl">Already saved to ${existingLocation}</span><br><span class="text-lg mt-2 inline-block">AWB: ${awb}</span>`;
                         statusDiv.className = "mb-6 p-4 bg-red-100 border-4 border-red-600 text-3xl font-black text-center text-red-700 rounded-lg block shadow-lg";
-                        awbInput.value = '';
-                        manageFocusState(awbInput);
+                        awbInput.value = ''; manageFocusState(awbInput);
                         return;
                     }
 
@@ -887,13 +876,11 @@
                     if (currentItemsInSlot >= parseInt(slotCapacity.value)) {
                         playSlotFullChime();
                         slotCounter.value = parseInt(slotCounter.value) + 1;
-                        applySmartDefaults();
-                        refreshSlotData();
+                        applySmartDefaults(); refreshSlotData();
                     } else {
                         playSuccessBeep();
                         capacityDisplay.textContent = `Item ${currentItemsInSlot} of ${slotCapacity.value} currently in slot`;
                     }
-
                     manageFocusState(awbInput);
                 } catch (error) {
                     playDuplicateBuzzer();
@@ -903,12 +890,11 @@
                 }
             });
 
-            // --- 9. CAMERA SCANNER LOGIC ---
+            // --- CAMERA SCANNER LOGIC ---
             const startCameraBtn = document.getElementById('startCameraBtn');
             const readerDiv = document.getElementById('reader');
             const inboundForm = document.getElementById('inboundForm');
-            let html5QrCode;
-            let isCameraCooldown = false;
+            let html5QrCode; let isCameraCooldown = false;
 
             startCameraBtn.addEventListener('click', () => {
                 if (isCameraActive && html5QrCode) {
@@ -930,15 +916,11 @@
                 html5QrCode = new Html5Qrcode("reader");
                 isCameraActive = true;
 
-                const config = { fps: 10, qrbox: { width: 300, height: 300 } };
-
                 html5QrCode.start(
-                    { facingMode: "environment" },
-                    config,
+                    { facingMode: "environment" }, { fps: 10, qrbox: { width: 300, height: 300 } },
                     (decodedText) => {
                         if (isCameraCooldown) return;
                         isCameraCooldown = true;
-
                         document.getElementById('awbInput').value = decodedText;
                         inboundForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
@@ -950,42 +932,30 @@
                     },
                     (errorMessage) => { }
                 ).catch((err) => {
-                    isCameraActive = false;
-                    alert("Camera access denied. Please check permissions.");
+                    isCameraActive = false; alert("Camera access denied.");
                 });
             });
 
-            // --- 10. OUTBOUND LOGIC (OPTIMIZED & DEBOUNCED) ---
+            // --- OUTBOUND LOGIC ---
             const searchInput = document.getElementById('searchInput');
             const tagArea = document.getElementById('tagArea');
             const searchDbBtn = document.getElementById('searchDbBtn');
             const resultsArea = document.getElementById('resultsArea');
             const collectAllBtn = document.getElementById('collectAllBtn');
-            let searchQueries = [];
-            let currentDisplayedIds = [];
-            let currentDisplayedData = {};
+            let searchQueries = []; let currentDisplayedIds = []; let currentDisplayedData = {};
 
             function clearSearch() {
-                searchQueries = [];
-                currentDisplayedIds = [];
-                currentDisplayedData = {};
-                tagArea.innerHTML = '';
-                resultsArea.innerHTML = '';
-                searchDbBtn.classList.add('hidden');
-                collectAllBtn.classList.add('hidden');
-                searchInput.value = '';
-                searchInput.focus();
+                searchQueries = []; currentDisplayedIds = []; currentDisplayedData = {};
+                tagArea.innerHTML = ''; resultsArea.innerHTML = '';
+                searchDbBtn.classList.add('hidden'); collectAllBtn.classList.add('hidden');
+                searchInput.value = ''; searchInput.focus();
             }
 
             searchInput.addEventListener('keydown', function (e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     const value = e.target.value.toUpperCase().trim();
-
-                    if (value.length < 4) {
-                        alert("Please enter at least 4 digits/characters.");
-                        return;
-                    }
+                    if (value.length < 4) { alert("Please enter at least 4 digits."); return; }
 
                     if (!searchQueries.includes(value)) {
                         searchQueries.push(value);
@@ -994,10 +964,7 @@
                         tag.innerHTML = `${value} <span onclick="removeTag(this, '${value}')" class="ml-2">✖</span>`;
                         tagArea.appendChild(tag);
                     }
-
-                    searchInput.value = '';
-                    searchDbBtn.classList.remove('hidden');
-                    searchDbBtn.click();
+                    searchInput.value = ''; searchDbBtn.classList.remove('hidden'); searchDbBtn.click();
                 }
             });
 
@@ -1005,32 +972,20 @@
                 element.parentElement.remove();
                 searchQueries = searchQueries.filter(q => q !== value);
                 if (searchQueries.length === 0) {
-                    searchDbBtn.classList.add('hidden');
-                    collectAllBtn.classList.add('hidden');
-                    resultsArea.innerHTML = '';
-                } else {
-                    searchDbBtn.click();
-                }
+                    searchDbBtn.classList.add('hidden'); collectAllBtn.classList.add('hidden'); resultsArea.innerHTML = '';
+                } else { searchDbBtn.click(); }
             }
 
-            // --- DEBOUNCED AUTO-SUBMIT FOR FULL BARCODES (MOBILE SAFE) ---
             let autoSubmitTimeout;
-
-            function checkAndAutoSubmit() {
+            searchInput.addEventListener('input', () => {
                 clearTimeout(autoSubmitTimeout);
-
                 autoSubmitTimeout = setTimeout(() => {
                     const value = searchInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-
                     let isFullBarcode = false;
 
-                    if (value.startsWith("680") && /^680\d{12}$/.test(value)) {
-                        isFullBarcode = true;
-                    } else if (value.startsWith("SPXMY") && /^SPXMY\d{12}$/.test(value)) {
-                        isFullBarcode = true;
-                    } else if (value.startsWith("MY") && /^MY\d{12,15}[A-Z]?$/.test(value)) {
-                        isFullBarcode = true;
-                    }
+                    if (value.startsWith("680") && /^680\d{12}$/.test(value)) isFullBarcode = true;
+                    else if (value.startsWith("SPXMY") && /^SPXMY\d{12}$/.test(value)) isFullBarcode = true;
+                    else if (value.startsWith("MY") && /^MY\d{12,15}[A-Z]?$/.test(value)) isFullBarcode = true;
 
                     if (isFullBarcode) {
                         if (!searchQueries.includes(value)) {
@@ -1040,31 +995,17 @@
                             tag.innerHTML = `${value} <span onclick="removeTag(this, '${value}')" class="ml-2">✖</span>`;
                             tagArea.appendChild(tag);
                         }
-
-                        searchInput.value = '';
-                        searchDbBtn.classList.remove('hidden');
-
-                        executeLocalSearch();
+                        searchInput.value = ''; searchDbBtn.classList.remove('hidden'); executeLocalSearch();
                     }
                 }, 100);
-            }
-
-            searchInput.addEventListener('input', checkAndAutoSubmit);
-
-            searchDbBtn.addEventListener('click', () => {
-                if (searchQueries.length === 0) return;
-                executeLocalSearch();
             });
 
-            function executeLocalSearch() {
-                resultsArea.innerHTML = '';
-                collectAllBtn.classList.add('hidden');
-                currentDisplayedIds = [];
-                currentDisplayedData = {};
+            searchDbBtn.addEventListener('click', () => { if (searchQueries.length > 0) executeLocalSearch(); });
 
-                let resultsHTML = '';
-                let directMatches = new Set();
-                let namesToGroup = new Set();
+            function executeLocalSearch() {
+                resultsArea.innerHTML = ''; collectAllBtn.classList.add('hidden');
+                currentDisplayedIds = []; currentDisplayedData = {};
+                let resultsHTML = ''; let directMatches = new Set(); let namesToGroup = new Set();
 
                 allInventoryData.forEach(data => {
                     const awb = data.full_awb.toUpperCase();
@@ -1080,21 +1021,14 @@
                     if (isMatch) {
                         data._matchedQuery = searchQueries.find(q => awb.includes(q.trim()) || nameStr.includes(q.trim()));
                         directMatches.add(data);
-
-                        if (data.customerName) {
-                            namesToGroup.add(data.customerName.toUpperCase().trim());
-                        }
+                        if (data.customerName) namesToGroup.add(data.customerName.toUpperCase().trim());
                     }
                 });
 
                 let finalParcelsToDisplay = new Set([...directMatches]);
-
                 allInventoryData.forEach(data => {
                     if (data.customerName) {
-                        const normalizedItemName = data.customerName.toUpperCase().trim();
-                        if (namesToGroup.has(normalizedItemName)) {
-                            finalParcelsToDisplay.add(data);
-                        }
+                        if (namesToGroup.has(data.customerName.toUpperCase().trim())) finalParcelsToDisplay.add(data);
                     }
                 });
 
@@ -1119,17 +1053,11 @@
                         let qToken = matchedQuery.toUpperCase().trim();
                         let lastIdx = awb.lastIndexOf(qToken);
                         if (lastIdx !== -1) {
-                            displayAwb = awb.substring(0, lastIdx) +
-                                `<span class="text-black font-black text-lg bg-yellow-200 px-1 rounded shadow-sm border border-yellow-400">` +
-                                awb.substring(lastIdx, lastIdx + qToken.length) +
-                                `</span>` +
-                                awb.substring(lastIdx + qToken.length);
+                            displayAwb = awb.substring(0, lastIdx) + `<span class="text-black font-black text-lg bg-yellow-200 px-1 rounded shadow-sm border border-yellow-400">` + awb.substring(lastIdx, lastIdx + qToken.length) + `</span>` + awb.substring(lastIdx + qToken.length);
                         }
                     }
 
-                    let relatedBadge = (!directMatches.has(data))
-                        ? `<span class="select-none bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm border border-blue-200 shrink-0 uppercase">Auto-Found</span>`
-                        : '';
+                    let relatedBadge = (!directMatches.has(data)) ? `<span class="select-none bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm border border-blue-200 shrink-0 uppercase">Auto-Found</span>` : '';
 
                     const customerDisplay = data.customerName
                         ? `<div class="flex items-center justify-between gap-2 mb-2 w-full overflow-hidden">
@@ -1150,12 +1078,10 @@
                         <button onclick="markCollected('${docId}')" class="bg-blue-600 text-white px-6 md:px-8 py-4 rounded-lg text-xl md:text-2xl font-bold hover:bg-blue-700 shadow-md transition w-full md:w-auto flex-shrink-0">
                             Collect
                         </button>
-                    </div>
-                `;
+                    </div>`;
                 });
 
                 resultsArea.innerHTML = resultsHTML;
-
                 if (currentDisplayedIds.length > 1) {
                     collectAllBtn.classList.remove('hidden');
                     collectAllBtn.innerHTML = `📦 COLLECT ALL ${currentDisplayedIds.length} DISPLAYED`;
@@ -1170,7 +1096,6 @@
                         data.collectedBy = currentUser || 'Admin';
 
                         const batch = db.batch();
-                        // SAAS CHANGE: Listening only to shopDB
                         batch.set(shopDB.collection("collected_parcels").doc(awbId), data);
                         batch.delete(shopDB.collection("active_parcels").doc(awbId));
                         await batch.commit();
@@ -1180,17 +1105,13 @@
 
                     const card = document.getElementById(`card-${awbId}`);
                     if (card) card.remove();
-
                     currentDisplayedIds = currentDisplayedIds.filter(id => id !== awbId);
 
-                    // --- THE FIX: Instantly kill the specific search tag associated with this parcel ---
+                    // --- NEW TAG WIPE FIX FOR INDIVIDUAL PARCELS ---
                     if (data && data._matchedQuery) {
                         const query = data._matchedQuery;
                         if (searchQueries.includes(query)) {
-                            // Remove it from the active queries array
                             searchQueries = searchQueries.filter(q => q !== query);
-
-                            // Re-draw the tag area to instantly make the purple tag vanish
                             tagArea.innerHTML = '';
                             searchQueries.forEach(q => {
                                 const tag = document.createElement('div');
@@ -1198,18 +1119,24 @@
                                 tag.innerHTML = `${q} <span onclick="removeTag(this, '${q}')" class="ml-2">✖</span>`;
                                 tagArea.appendChild(tag);
                             });
-
                             if (searchQueries.length === 0) searchDbBtn.classList.add('hidden');
                         }
                     }
-                    // -----------------------------------------------------------------------------------
 
                     if (currentDisplayedIds.length <= 1) collectAllBtn.classList.add('hidden');
 
+                    // --- INSTANT CLEARING IF ALL DONE ---
                     if (resultsArea.children.length === 0) {
-                        // The 1.5s delay you like remains perfectly intact here
-                        resultsArea.innerHTML = '<p class="text-green-600 text-2xl font-bold text-center mt-8">✅ All parcels collected.</p>';
-                        setTimeout(clearSearch, 1500);
+                        searchQueries = [];
+                        tagArea.innerHTML = '';
+                        searchInput.value = '';
+                        searchInput.focus();
+                        searchDbBtn.classList.add('hidden');
+
+                        resultsArea.innerHTML = '<p class="text-green-600 text-2xl font-bold text-center mt-8">✅ Parcel collected.</p>';
+                        setTimeout(() => {
+                            if (searchQueries.length === 0) resultsArea.innerHTML = '';
+                        }, 1500);
                     }
                 } catch (error) {
                     alert("Error updating database: " + error.message);
@@ -1225,32 +1152,39 @@
                         if (data) {
                             data.collectedAt = Date.now();
                             data.collectedBy = currentUser || 'Admin';
-                            // SAAS CHANGE: Listening only to shopDB
                             batch.set(shopDB.collection("collected_parcels").doc(id), data);
                         }
                         batch.delete(shopDB.collection("active_parcels").doc(id));
                     });
                     await batch.commit();
 
+                    searchQueries = [];
+                    currentDisplayedIds = [];
+                    tagArea.innerHTML = '';
+                    searchInput.value = '';
+                    searchInput.focus();
+                    searchDbBtn.classList.add('hidden');
+
                     resultsArea.innerHTML = '<p class="text-green-600 text-2xl font-bold text-center mt-8">✅ All parcels collected.</p>';
                     collectAllBtn.classList.add('hidden');
                     collectAllBtn.innerHTML = "📦 COLLECT ALL DISPLAYED";
-                    setTimeout(clearSearch, 1500);
+
+                    setTimeout(() => {
+                        if (searchQueries.length === 0) resultsArea.innerHTML = '';
+                    }, 1500);
                 } catch (error) {
                     alert("Error collecting all: " + error.message);
                     collectAllBtn.innerHTML = "📦 COLLECT ALL DISPLAYED";
                 }
             });
 
-            // --- 11. BULK / MULTI-PARCEL CONSOLIDATION LOGIC ---
-
+            // --- BULK TAB LOGIC ---
             function loadBulkTab() {
                 const listDiv = document.getElementById('bulkList');
                 listDiv.innerHTML = '<p class="text-blue-500 font-bold text-xl text-center py-8">Scanning shelves...</p>';
 
                 setTimeout(() => {
                     let groups = {};
-
                     allInventoryData.forEach(p => {
                         if (p.customerName) {
                             let name = p.customerName.toUpperCase().trim();
@@ -1259,33 +1193,24 @@
                         }
                     });
 
-                    let bulkHTML = '';
-                    let matchCount = 0;
+                    let bulkHTML = ''; let matchCount = 0;
 
                     Object.keys(groups).forEach(name => {
                         let parcels = groups[name];
-
                         if (parcels.length >= 3) {
-
                             let allAlreadyInBulk = parcels.every(p => p.location.startsWith('BULK'));
-
                             if (!allAlreadyInBulk) {
                                 matchCount++;
-                                let parcelDetails = '';
-                                let docIdsToMove = [];
-
+                                let parcelDetails = ''; let docIdsToMove = [];
                                 parcels.forEach(p => {
                                     docIdsToMove.push(p.id || p.full_awb);
                                     parcelDetails += `
                                     <div class="bg-gray-50 border border-gray-300 px-3 py-2 rounded flex justify-between items-center w-full">
                                         <span class="text-gray-600 text-sm font-bold">Rack: <span class="text-blue-700 text-xl font-black">${p.location}</span></span>
                                         <span class="text-gray-900 font-black text-lg select-all bg-yellow-200 px-2 py-0.5 rounded shadow-sm border border-yellow-400">${p.full_awb}</span>
-                                    </div>
-                                `;
+                                    </div>`;
                                 });
-
                                 const stringifiedIds = JSON.stringify(docIdsToMove).replace(/"/g, '&quot;');
-
                                 bulkHTML += `
                                 <div class="bg-white border-2 border-blue-200 p-5 rounded-lg shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                                     <div class="w-full md:w-2/3">
@@ -1296,47 +1221,33 @@
                                     <div class="w-full md:w-1/3 flex flex-col gap-2 shrink-0">
                                         <label class="text-xs font-bold text-gray-500 uppercase tracking-wide">Destination Rack:</label>
                                         <input type="text" id="bulk-input-${matchCount}" value="BULK-RACK" class="w-full p-3 border-2 border-blue-300 rounded-lg text-center font-black uppercase text-blue-900 focus:border-blue-600 focus:outline-none" placeholder="e.g. BULK-A">
-                                        
                                         <button onclick="moveParcelsToBulk('${stringifiedIds}', '${name.replace(/'/g, "\\'")}', 'bulk-input-${matchCount}')" class="bg-blue-800 text-white font-bold px-6 py-4 rounded-lg hover:bg-blue-900 transition shadow-md w-full text-lg border-2 border-blue-900 mt-2">
                                             📦 Mark as MOVED
                                         </button>
                                     </div>
-                                </div>
-                            `;
+                                </div>`;
                             }
                         }
                     });
-
-                    if (matchCount === 0) {
-                        listDiv.innerHTML = '<p class="text-green-600 text-2xl font-bold text-center py-8">All clear! No customers have 3+ scattered parcels. 🎉</p>';
-                    } else {
-                        listDiv.innerHTML = bulkHTML;
-                    }
+                    if (matchCount === 0) listDiv.innerHTML = '<p class="text-green-600 text-2xl font-bold text-center py-8">All clear! No customers have 3+ scattered parcels. 🎉</p>';
+                    else listDiv.innerHTML = bulkHTML;
                 }, 250);
             }
 
             async function moveParcelsToBulk(stringifiedIds, customerName, inputId) {
                 const docIds = JSON.parse(stringifiedIds.replace(/&quot;/g, '"'));
                 const destinationRack = document.getElementById(inputId).value.toUpperCase().trim() || 'BULK-RACK';
-
-                if (!confirm(`Are you sure you have physically moved all ${docIds.length} parcels for ${customerName} to ${destinationRack}?`)) {
-                    return;
-                }
+                if (!confirm(`Are you sure you have physically moved all ${docIds.length} parcels for ${customerName} to ${destinationRack}?`)) return;
 
                 try {
                     const batch = db.batch();
-
                     docIds.forEach(id => {
-                        // SAAS CHANGE: Listening only to shopDB
                         const docRef = shopDB.collection("active_parcels").doc(id);
                         batch.update(docRef, { location: destinationRack });
                     });
-
                     await batch.commit();
-
                     alert(`✅ Successfully updated ${docIds.length} parcels to ${destinationRack}!`);
                     loadBulkTab();
-
                 } catch (error) {
                     alert("Error moving parcels: " + error.message);
                 }
