@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "ctm-bsc-98545"
-  }
+  },
+  "targets": {
+    "ctm-bsc-98545": {
+      "hosting": {
+        "main": [
+          "pudowms"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
