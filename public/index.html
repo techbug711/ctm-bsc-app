@@ -317,7 +317,10 @@
                         const currentTime = Date.now();
 
                         // 1. Check for Payment / Expiry Lockout
-                        if (shopData.status !== 'active' || currentTime > shopData.expiryDate) {
+                        // Safely convert Firestore Timestamp to milliseconds (with a fallback just in case)
+                        const expiryTimeMs = shopData.expiryDate.toMillis ? shopData.expiryDate.toMillis() : shopData.expiryDate;
+
+                        if (shopData.status !== 'active' || currentTime > expiryTimeMs) {
                             document.getElementById('lockout-screen').classList.remove('hidden');
                             document.getElementById('main-app').classList.add('hidden');
                             return; // HALT EXECUTION - DO NOT LOAD PARCELS
