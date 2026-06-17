@@ -82,27 +82,7 @@
             <h1 class="text-3xl font-black text-blue-700 mb-2">PUDO WMS</h1>
             <p class="text-gray-500 font-bold mb-8">Select your shift profile</p>
 
-            <div class="space-y-4">
-                <button onclick="loginWithPin('Paan', '1111')"
-                    class="w-full bg-blue-100 text-blue-800 font-bold text-2xl py-6 rounded-lg hover:bg-blue-200 transition border-2 border-blue-200">
-                    👨‍💻 Log in as Paan
-                </button>
-                <button onclick="loginWithPin('Ain', '2222')"
-                    class="w-full bg-purple-100 text-purple-800 font-bold text-2xl py-6 rounded-lg hover:bg-purple-200 transition border-2 border-purple-200">
-                    👩‍💻 Log in as Ain
-                </button>
-                <button onclick="loginWithPin('Zul', '3333')"
-                    class="w-full bg-green-100 text-green-800 font-bold text-2xl py-6 rounded-lg hover:bg-green-200 transition border-2 border-green-200">
-                    🧑‍💻 Log in as Zul
-                </button>
-                <button onclick="loginWithPin('Shaz', '4444')"
-                    class="w-full bg-pink-100 text-pink-800 font-bold text-2xl py-6 rounded-lg hover:bg-pink-200 transition border-2 border-pink-200">
-                    👩‍💻 Log in as Shaz
-                </button>
-                <button onclick="loginWithPin('Admin', '9999')"
-                    class="w-full bg-gray-200 text-gray-800 font-bold text-xl py-4 rounded-lg hover:bg-gray-300 transition mt-4">
-                    ⚙️ Admin Login
-                </button>
+            <div id="staff-buttons-container" class="space-y-4 flex flex-col">
             </div>
 
             <button onclick="lockMasterDevice()" class="mt-8 text-sm text-red-500 font-bold hover:underline transition">
@@ -309,7 +289,7 @@
             firebase.initializeApp(firebaseConfig);
             const db = firebase.firestore();
 
-            // --- SAAS GATEKEEPER ---
+            // --- SAAS GATEKEEPER & FEATURE GATING ---
             let currentShopId = null;
             let currentShopTier = 'basic';
             let shopDB = null;
@@ -324,7 +304,7 @@
                         const shopData = doc.data();
                         const currentTime = Date.now();
 
-                        // FIX: Safely parse Firebase Timestamp vs raw number
+                        // Safely parse Firebase Timestamp vs raw number
                         const expiryTimeMs = shopData.expiryDate.toMillis ? shopData.expiryDate.toMillis() : shopData.expiryDate;
 
                         // Lockout Evaluation
@@ -334,15 +314,46 @@
                             return;
                         }
 
-                        currentShopTier = shopData.tier;
+                        currentShopTier = shopData.tier ? shopData.tier.toLowerCase() : 'basic';
                         document.title = `${shopData.shopName} - PUDO WMS`;
 
-                        if (currentShopTier === 'basic') {
-                            const multiTab = document.getElementById('tab-bulk');
-                            if (multiTab) multiTab.classList.add('hidden');
+                        // 2. Staff Profile Limits Enforcement
+                        let maxStaffAllowed = 3; // Basic default
+                        if (currentShopTier === 'standard') maxStaffAllowed = 5;
+                        if (currentShopTier === 'premium') maxStaffAllowed = 999; // Unlimited
+
+                        const staffProfiles = shopData.staffProfiles || { "Staff 1": "1111", "Admin": "9999" };
+                        let staffHTML = '';
+
+                        const styleVariants = [
+                            "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200",
+                            "bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200",
+                            "bg-green-100 text-green-800 border-green-200 hover:bg-green-200",
+                            "bg-pink-100 text-pink-800 border-pink-200 hover:bg-pink-200"
+                        ];
+
+                        let colorIndex = 0;
+                        let staffCount = 0;
+
+                        for (const [name, pin] of Object.entries(staffProfiles)) {
+                            if (name.toUpperCase() === 'ADMIN') {
+                                // Admin Dashboard is Standard & Premium only
+                                if (currentShopTier !== 'basic') {
+                                    staffHTML += `<button onclick="loginWithPin('${name}', '${pin}')" class="w-full bg-gray-200 text-gray-800 font-bold text-xl py-4 rounded-lg hover:bg-gray-300 transition mt-4 border-2 border-gray-300 order-last">⚙️ ${name} Login</button>`;
+                                }
+                            } else {
+                                // Enforce Staff Limits based on Tier
+                                if (staffCount < maxStaffAllowed) {
+                                    const style = styleVariants[colorIndex % styleVariants.length];
+                                    staffHTML += `<button onclick="loginWithPin('${name}', '${pin}')" class="w-full ${style} font-bold text-2xl py-6 rounded-lg transition border-2">🧑‍💻 Log in as ${name}</button>`;
+                                    colorIndex++;
+                                    staffCount++;
+                                }
+                            }
                         }
 
-                        console.log("Gatekeeper passed. Waiting for Auth verification...");
+                        document.getElementById('staff-buttons-container').innerHTML = staffHTML;
+                        console.log(`Workspace Loaded: ${currentShopTier.toUpperCase()} Tier. Staff allowed: ${maxStaffAllowed}`);
                     } else {
                         alert("System Error: Unregistered Workspace ID.");
                     }
@@ -595,7 +606,16 @@
                     const isYoyi = p.full_awb.startsWith('680');
                     const platformBadge = isYoyi ? '<span class="select-none bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="select-none bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
 
-                    const nameDisplay = p.customerName ? `<p class="text-sm font-bold text-blue-800 mt-1 truncate">${p.customerName}</p>` : '';
+                    // --- PLG FREEMIUM TEASE (INVENTORY) ---
+                    let displayName = p.customerName ? p.customerName : '';
+                    if (displayName) {
+                        if (currentShopTier === 'basic') {
+                            displayName = '<span class="bg-yellow-100 text-yellow-800 border border-yellow-300 px-2 py-1 rounded text-[10px] font-black uppercase">🔒 Upgrade to reveal name</span>';
+                        } else if (currentShopTier === 'standard' && !p.full_awb.startsWith('680')) {
+                            displayName = '<span class="bg-yellow-100 text-yellow-800 border border-yellow-300 px-2 py-1 rounded text-[10px] font-black uppercase">🔒 Premium: SPX Names</span>';
+                        }
+                    }
+                    const nameDisplay = displayName ? `<p class="text-sm font-bold text-blue-800 mt-1 truncate">${displayName}</p>` : '';
 
                     let deleteBtn = '';
                     if (currentUser === 'Admin') {
@@ -1059,9 +1079,19 @@
 
                     let relatedBadge = (!directMatches.has(data)) ? `<span class="select-none bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm border border-blue-200 shrink-0 uppercase">Auto-Found</span>` : '';
 
-                    const customerDisplay = data.customerName
+                    // --- PLG FREEMIUM TEASE (OUTBOUND) ---
+                    let displayName = data.customerName ? data.customerName : '';
+                    if (displayName) {
+                        if (currentShopTier === 'basic') {
+                            displayName = '<span class="bg-yellow-100 text-yellow-800 border border-yellow-400 px-3 py-1.5 rounded-lg text-sm font-black uppercase shadow-sm">🔒 Name Hidden - Upgrade</span>';
+                        } else if (currentShopTier === 'standard' && !awb.startsWith('680')) {
+                            displayName = '<span class="bg-yellow-100 text-yellow-800 border border-yellow-400 px-3 py-1.5 rounded-lg text-sm font-black uppercase shadow-sm">🔒 SPX Name - Premium</span>';
+                        }
+                    }
+
+                    const customerDisplay = displayName
                         ? `<div class="flex items-center justify-between gap-2 mb-2 w-full overflow-hidden">
-                           <p class="text-2xl md:text-3xl font-black text-blue-900 truncate">${data.customerName}</p>
+                           <p class="text-xl md:text-2xl font-black text-blue-900 truncate">${displayName}</p>
                            ${relatedBadge}
                        </div>`
                         : `<p class="text-sm font-bold text-gray-400 mb-2 italic">No name data yet</p>`;
@@ -1107,7 +1137,7 @@
                     if (card) card.remove();
                     currentDisplayedIds = currentDisplayedIds.filter(id => id !== awbId);
 
-                    // --- NEW TAG WIPE FIX FOR INDIVIDUAL PARCELS ---
+                    // INSTANT TAG WIPE FIX
                     if (data && data._matchedQuery) {
                         const query = data._matchedQuery;
                         if (searchQueries.includes(query)) {
@@ -1125,7 +1155,6 @@
 
                     if (currentDisplayedIds.length <= 1) collectAllBtn.classList.add('hidden');
 
-                    // --- INSTANT CLEARING IF ALL DONE ---
                     if (resultsArea.children.length === 0) {
                         searchQueries = [];
                         tagArea.innerHTML = '';
@@ -1178,7 +1207,7 @@
                 }
             });
 
-            // --- BULK TAB LOGIC ---
+            // --- BULK TAB LOGIC (FREEMIUM TEASE ENABLED) ---
             function loadBulkTab() {
                 const listDiv = document.getElementById('bulkList');
                 listDiv.innerHTML = '<p class="text-blue-500 font-bold text-xl text-center py-8">Scanning shelves...</p>';
@@ -1202,19 +1231,39 @@
                             if (!allAlreadyInBulk) {
                                 matchCount++;
                                 let parcelDetails = ''; let docIdsToMove = [];
+
+                                // --- PLG FREEMIUM TEASE (MULTI-PARCEL) ---
+                                let displayNameHeader = name;
+                                if (currentShopTier === 'basic') {
+                                    displayNameHeader = '<span class="text-yellow-600 font-black text-xl">🔒 [CUSTOMER HIDDEN - UPGRADE]</span>';
+                                } else if (currentShopTier === 'standard' && !parcels[0].full_awb.startsWith('680')) {
+                                    displayNameHeader = '<span class="text-yellow-600 font-black text-xl">🔒 [SPX CUSTOMER - UPGRADE]</span>';
+                                }
+
                                 parcels.forEach(p => {
                                     docIdsToMove.push(p.id || p.full_awb);
+
+                                    let displayLocation = p.location;
+                                    let displayTracking = p.full_awb;
+
+                                    if (currentShopTier === 'basic') {
+                                        displayLocation = '🔒 ***';
+                                        displayTracking = p.full_awb.substring(0, 3) + '******** 🔒';
+                                    }
+
                                     parcelDetails += `
                                     <div class="bg-gray-50 border border-gray-300 px-3 py-2 rounded flex justify-between items-center w-full">
-                                        <span class="text-gray-600 text-sm font-bold">Rack: <span class="text-blue-700 text-xl font-black">${p.location}</span></span>
-                                        <span class="text-gray-900 font-black text-lg select-all bg-yellow-200 px-2 py-0.5 rounded shadow-sm border border-yellow-400">${p.full_awb}</span>
+                                        <span class="text-gray-600 text-sm font-bold">Rack: <span class="text-blue-700 text-xl font-black">${displayLocation}</span></span>
+                                        <span class="text-gray-900 font-black text-lg select-all bg-yellow-200 px-2 py-0.5 rounded shadow-sm border border-yellow-400">${displayTracking}</span>
                                     </div>`;
                                 });
+
                                 const stringifiedIds = JSON.stringify(docIdsToMove).replace(/"/g, '&quot;');
+
                                 bulkHTML += `
                                 <div class="bg-white border-2 border-blue-200 p-5 rounded-lg shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                                     <div class="w-full md:w-2/3">
-                                        <p class="text-2xl font-black text-blue-900 mb-1">${name} <span class="text-sm bg-red-100 text-red-700 px-2 py-1 rounded-full ml-2">${parcels.length} Items</span></p>
+                                        <p class="text-2xl font-black text-blue-900 mb-1">${displayNameHeader} <span class="text-sm bg-red-100 text-red-700 px-2 py-1 rounded-full ml-2">${parcels.length} Items</span></p>
                                         <p class="text-sm text-gray-500 font-bold mb-2">Currently scattered at:</p>
                                         <div class="flex flex-col gap-2 w-full">${parcelDetails}</div>
                                     </div>
