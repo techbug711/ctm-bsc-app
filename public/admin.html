@@ -103,32 +103,50 @@
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100">
                     <div class="p-6 flex flex-col justify-between">
-                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Today (24 Hours)</p>
-                        <div class="space-y-1">
-                            <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-day"
-                                    class="text-green-600 font-black">0</span></p>
-                            <p class="text-lg font-bold text-gray-700">Outbound: <span id="matrix-out-day"
-                                    class="text-purple-600 font-black">0</span></p>
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Today (24 Hours)</p>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-start">
+                                <p class="text-lg font-bold text-gray-700">Inbound:</p>
+                                <div id="matrix-in-day"
+                                    class="text-right text-2xl text-green-600 font-black leading-none">0</div>
+                            </div>
+                            <div class="flex justify-between items-start">
+                                <p class="text-lg font-bold text-gray-700">Outbound:</p>
+                                <div id="matrix-out-day"
+                                    class="text-right text-2xl text-purple-600 font-black leading-none">0</div>
+                            </div>
                         </div>
                     </div>
                     <div class="p-6 flex flex-col justify-between">
-                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">This Week (Last 7 Days)
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">This Week (Last 7 Days)
                         </p>
-                        <div class="space-y-1">
-                            <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-week"
-                                    class="text-green-600 font-black">0</span></p>
-                            <p class="text-lg font-bold text-gray-700">Outbound: <span id="matrix-out-week"
-                                    class="text-purple-600 font-black">0</span></p>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-start">
+                                <p class="text-lg font-bold text-gray-700">Inbound:</p>
+                                <div id="matrix-in-week"
+                                    class="text-right text-2xl text-green-600 font-black leading-none">0</div>
+                            </div>
+                            <div class="flex justify-between items-start">
+                                <p class="text-lg font-bold text-gray-700">Outbound:</p>
+                                <div id="matrix-out-week"
+                                    class="text-right text-2xl text-purple-600 font-black leading-none">0</div>
+                            </div>
                         </div>
                     </div>
                     <div class="p-6 flex flex-col justify-between">
-                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">This Month (Current)
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">This Month (Current)
                         </p>
-                        <div class="space-y-1">
-                            <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-month"
-                                    class="text-green-600 font-black">0</span></p>
-                            <p class="text-lg font-bold text-gray-700">Outbound: <span id="matrix-out-month"
-                                    class="text-purple-600 font-black">0</span></p>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-start">
+                                <p class="text-lg font-bold text-gray-700">Inbound:</p>
+                                <div id="matrix-in-month"
+                                    class="text-right text-2xl text-green-600 font-black leading-none">0</div>
+                            </div>
+                            <div class="flex justify-between items-start">
+                                <p class="text-lg font-bold text-gray-700">Outbound:</p>
+                                <div id="matrix-out-month"
+                                    class="text-right text-2xl text-purple-600 font-black leading-none">0</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -213,6 +231,7 @@
         const currentShopId = urlParams.get('shop') || 'ctm_melewar';
         const shopDB = db.collection("shops").doc(currentShopId);
         let syncStarted = false;
+        let currentShopTier = 'basic';
 
         firebase.auth().onAuthStateChanged((user) => {
             if (user) {
@@ -247,7 +266,7 @@
                         return;
                     }
 
-                    const currentShopTier = shopData.tier ? shopData.tier.toLowerCase() : 'basic';
+                    currentShopTier = shopData.tier ? shopData.tier.toLowerCase() : 'basic';
 
                     if (currentShopTier === 'basic') {
                         document.getElementById('tier-lockout-screen').classList.remove('hidden');
@@ -335,41 +354,28 @@
             const nowMs = Date.now();
             const now = new Date();
 
-            // Today: Midnight this morning
             const startOfToday = new Date(now);
             startOfToday.setHours(0, 0, 0, 0);
             const dailyThreshold = startOfToday.getTime();
 
-            // This Week: Rolling 7 days back
             const weeklyThreshold = nowMs - (7 * 24 * 60 * 60 * 1000);
 
-            // This Month: The exact 1st day of the current calendar month
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
             startOfMonth.setHours(0, 0, 0, 0);
             const monthlyThreshold = startOfMonth.getTime();
 
-            // Dead Stock: Rolling 5 days back
             const deadStockThreshold = nowMs - (5 * 24 * 60 * 60 * 1000);
-
-            let activeInboundToday = 0;
-            let collectedInboundToday = 0;
-
-            function updateInboundKPI() {
-                document.getElementById('kpi-inbound-today').textContent = activeInboundToday + collectedInboundToday;
-                document.getElementById('matrix-in-day').textContent = activeInboundToday + collectedInboundToday;
-            }
 
             // ISOLATED ACTIVE INVENTORY LISTENER
             shopDB.collection("active_parcels").onSnapshot((snapshot) => {
                 let totalActive = 0;
-                activeInboundToday = 0;
-                let activeInboundWeek = 0;
-                let activeInboundMonth = 0;
-
-                let spxCount = 0;
-                let yoyiCount = 0;
+                let spxCount = 0; let yoyiCount = 0;
                 let deadStockList = [];
                 let staffInboundMap = {};
+
+                // Active Arrays for splitting
+                let actSpx = { today: 0, week: 0, month: 0 };
+                let actYoyi = { today: 0, week: 0, month: 0 };
 
                 snapshot.forEach(doc => {
                     const data = doc.data();
@@ -379,33 +385,39 @@
                     if (isYoyi) yoyiCount++; else spxCount++;
 
                     if (data.timestamp >= dailyThreshold) {
-                        activeInboundToday++;
+                        isYoyi ? actYoyi.today++ : actSpx.today++;
                         const staff = data.scannedBy || 'Unknown';
                         staffInboundMap[staff] = (staffInboundMap[staff] || 0) + 1;
                     }
-                    if (data.timestamp >= weeklyThreshold) activeInboundWeek++;
-                    if (data.timestamp >= monthlyThreshold) activeInboundMonth++;
+                    if (data.timestamp >= weeklyThreshold) isYoyi ? actYoyi.week++ : actSpx.week++;
+                    if (data.timestamp >= monthlyThreshold) isYoyi ? actYoyi.month++ : actSpx.month++;
 
-                    if (data.timestamp < deadStockThreshold) {
-                        deadStockList.push(data);
-                    }
+                    if (data.timestamp < deadStockThreshold) deadStockList.push(data);
                 });
 
                 document.getElementById('kpi-total-active').textContent = totalActive;
                 document.getElementById('kpi-dead-stock').textContent = deadStockList.length;
 
-                document.getElementById('stat-spx').textContent = spxCount;
-                document.getElementById('stat-yoyi').textContent = yoyiCount;
-                platformChart.data.datasets[0].data = [spxCount, yoyiCount];
+                // Freemium Tease: Platform Doughnut Chart
+                if (currentShopTier === 'premium') {
+                    document.getElementById('stat-spx').textContent = spxCount;
+                    document.getElementById('stat-yoyi').textContent = yoyiCount;
+                    platformChart.data.datasets[0].data = [spxCount, yoyiCount];
+                    platformChart.data.datasets[0].backgroundColor = ['#f97316', '#22c55e'];
+                } else {
+                    document.getElementById('stat-spx').innerHTML = '<span class="text-xl">🔒</span>';
+                    document.getElementById('stat-yoyi').innerHTML = '<span class="text-xl">🔒</span>';
+                    platformChart.data.datasets[0].data = [1]; // Solid grey circle
+                    platformChart.data.datasets[0].backgroundColor = ['#e5e7eb'];
+                }
                 platformChart.update();
 
                 renderDeadStockTable(deadStockList.sort((a, b) => a.timestamp - b.timestamp));
 
                 window.latestStaffActiveInbound = staffInboundMap;
-                window.activeInboundWeek = activeInboundWeek;
-                window.activeInboundMonth = activeInboundMonth;
+                window.actSpx = actSpx;
+                window.actYoyi = actYoyi;
 
-                updateInboundKPI();
                 calculateMatrixTotals();
                 renderStaffChart();
             });
@@ -414,61 +426,107 @@
             shopDB.collection("collected_parcels")
                 .where("collectedAt", ">=", monthlyThreshold)
                 .onSnapshot((snapshot) => {
-                    let outboundToday = 0;
-                    let outboundWeek = 0;
-                    let outboundMonth = 0;
-
-                    collectedInboundToday = 0;
-                    let collectedInboundWeek = 0;
-                    let collectedInboundMonth = 0;
-
                     let staffOutboundMap = {};
                     let staffCollectedInboundMap = {};
 
+                    // Outbound and Intersecting Inbound Arrays for splitting
+                    let outSpx = { today: 0, week: 0, month: 0 };
+                    let outYoyi = { today: 0, week: 0, month: 0 };
+                    let collInSpx = { today: 0, week: 0, month: 0 };
+                    let collInYoyi = { today: 0, week: 0, month: 0 };
+
                     snapshot.forEach(doc => {
                         const data = doc.data();
+                        const isYoyi = data.full_awb.startsWith('680');
 
+                        // Outbound Counter Windows
                         if (data.collectedAt >= dailyThreshold) {
-                            outboundToday++;
+                            isYoyi ? outYoyi.today++ : outSpx.today++;
                             const collector = data.collectedBy || 'Unknown';
                             staffOutboundMap[collector] = (staffOutboundMap[collector] || 0) + 1;
                         }
-                        if (data.collectedAt >= weeklyThreshold) outboundWeek++;
-                        if (data.collectedAt >= monthlyThreshold) outboundMonth++;
+                        if (data.collectedAt >= weeklyThreshold) isYoyi ? outYoyi.week++ : outSpx.week++;
+                        if (data.collectedAt >= monthlyThreshold) isYoyi ? outYoyi.month++ : outSpx.month++;
 
+                        // Intersecting Inbound Windows
                         if (data.timestamp >= dailyThreshold) {
-                            collectedInboundToday++;
+                            isYoyi ? collInYoyi.today++ : collInSpx.today++;
                             const scanner = data.scannedBy || 'Unknown';
                             staffCollectedInboundMap[scanner] = (staffCollectedInboundMap[scanner] || 0) + 1;
                         }
-                        if (data.timestamp >= weeklyThreshold) collectedInboundWeek++;
-                        if (data.timestamp >= monthlyThreshold) collectedInboundMonth++;
+                        if (data.timestamp >= weeklyThreshold) isYoyi ? collInYoyi.week++ : collInSpx.week++;
+                        if (data.timestamp >= monthlyThreshold) isYoyi ? collInYoyi.month++ : collInSpx.month++;
                     });
-
-                    document.getElementById('kpi-outbound-today').textContent = outboundToday;
-                    document.getElementById('matrix-out-day').textContent = outboundToday;
-                    document.getElementById('matrix-out-week').textContent = outboundWeek;
-                    document.getElementById('matrix-out-month').textContent = outboundMonth;
 
                     window.latestStaffOutbound = staffOutboundMap;
                     window.latestStaffCollectedInbound = staffCollectedInboundMap;
-                    window.collectedInboundWeek = collectedInboundWeek;
-                    window.collectedInboundMonth = collectedInboundMonth;
+                    window.outSpx = outSpx; window.outYoyi = outYoyi;
+                    window.collInSpx = collInSpx; window.collInYoyi = collInYoyi;
 
-                    updateInboundKPI();
                     calculateMatrixTotals();
                     renderStaffChart();
                 });
         }
 
         function calculateMatrixTotals() {
-            const activeW = window.activeInboundWeek || 0;
-            const collW = window.collectedInboundWeek || 0;
-            const activeM = window.activeInboundMonth || 0;
-            const collM = window.collectedInboundMonth || 0;
+            // Default fallbacks if one database query loads faster than the other
+            const actSpx = window.actSpx || { today: 0, week: 0, month: 0 };
+            const actYoyi = window.actYoyi || { today: 0, week: 0, month: 0 };
+            const cInSpx = window.collInSpx || { today: 0, week: 0, month: 0 };
+            const cInYoyi = window.collInYoyi || { today: 0, week: 0, month: 0 };
 
-            document.getElementById('matrix-in-week').textContent = activeW + collW;
-            document.getElementById('matrix-in-month').textContent = activeM + collM;
+            const oSpx = window.outSpx || { today: 0, week: 0, month: 0 };
+            const oYoyi = window.outYoyi || { today: 0, week: 0, month: 0 };
+
+            // Calculate exact split metrics
+            const metrics = {
+                in: {
+                    day: { spx: actSpx.today + cInSpx.today, yoyi: actYoyi.today + cInYoyi.today },
+                    week: { spx: actSpx.week + cInSpx.week, yoyi: actYoyi.week + cInYoyi.week },
+                    month: { spx: actSpx.month + cInSpx.month, yoyi: actYoyi.month + cInYoyi.month }
+                },
+                out: {
+                    day: { spx: oSpx.today, yoyi: oYoyi.today },
+                    week: { spx: oSpx.week, yoyi: oYoyi.week },
+                    month: { spx: oSpx.month, yoyi: oYoyi.month }
+                }
+            };
+
+            // Update Top Headline KPIs
+            document.getElementById('kpi-inbound-today').textContent = metrics.in.day.spx + metrics.in.day.yoyi;
+            document.getElementById('kpi-outbound-today').textContent = metrics.out.day.spx + metrics.out.day.yoyi;
+
+            // Render Dynamic Matrix DOM with Premium Gating
+            const updateMatrixDOM = (type, time, spx, yoyi) => {
+                const total = spx + yoyi;
+                let splitDisplay = '';
+
+                if (currentShopTier === 'premium') {
+                    splitDisplay = `
+                        <p class="text-[10px] font-bold text-gray-400 uppercase mt-1 tracking-wide">
+                            <span class="text-orange-500">${spx}</span> SPX • <span class="text-green-500">${yoyi}</span> YOYI
+                        </p>
+                    `;
+                } else {
+                    splitDisplay = `
+                        <p class="text-[10px] font-bold text-yellow-700 uppercase mt-1 tracking-wide bg-yellow-100 border border-yellow-300 rounded px-1.5 py-0.5 inline-block shadow-sm">
+                            🔒 Premium: View Platform Split
+                        </p>
+                    `;
+                }
+
+                document.getElementById(`matrix-${type}-${time}`).innerHTML = `
+                    ${total} 
+                    ${splitDisplay}
+                `;
+            };
+
+            updateMatrixDOM('in', 'day', metrics.in.day.spx, metrics.in.day.yoyi);
+            updateMatrixDOM('out', 'day', metrics.out.day.spx, metrics.out.day.yoyi);
+            updateMatrixDOM('in', 'week', metrics.in.week.spx, metrics.in.week.yoyi);
+            updateMatrixDOM('out', 'week', metrics.out.week.spx, metrics.out.week.yoyi);
+            updateMatrixDOM('in', 'month', metrics.in.month.spx, metrics.in.month.yoyi);
+            updateMatrixDOM('out', 'month', metrics.out.month.spx, metrics.out.month.yoyi);
         }
 
         // --- 6. RENDERERS ---
