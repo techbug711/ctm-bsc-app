@@ -107,13 +107,11 @@
                         <div class="space-y-4">
                             <div class="flex justify-between items-start">
                                 <p class="text-lg font-bold text-gray-700">Inbound:</p>
-                                <div id="matrix-in-day"
-                                    class="text-right text-2xl text-green-600 font-black leading-none">0</div>
+                                <div id="matrix-in-day" class="text-right">0</div>
                             </div>
                             <div class="flex justify-between items-start">
                                 <p class="text-lg font-bold text-gray-700">Outbound:</p>
-                                <div id="matrix-out-day"
-                                    class="text-right text-2xl text-purple-600 font-black leading-none">0</div>
+                                <div id="matrix-out-day" class="text-right">0</div>
                             </div>
                         </div>
                     </div>
@@ -123,13 +121,11 @@
                         <div class="space-y-4">
                             <div class="flex justify-between items-start">
                                 <p class="text-lg font-bold text-gray-700">Inbound:</p>
-                                <div id="matrix-in-week"
-                                    class="text-right text-2xl text-green-600 font-black leading-none">0</div>
+                                <div id="matrix-in-week" class="text-right w-full">0</div>
                             </div>
                             <div class="flex justify-between items-start">
                                 <p class="text-lg font-bold text-gray-700">Outbound:</p>
-                                <div id="matrix-out-week"
-                                    class="text-right text-2xl text-purple-600 font-black leading-none">0</div>
+                                <div id="matrix-out-week" class="text-right w-full">0</div>
                             </div>
                         </div>
                     </div>
@@ -139,13 +135,11 @@
                         <div class="space-y-4">
                             <div class="flex justify-between items-start">
                                 <p class="text-lg font-bold text-gray-700">Inbound:</p>
-                                <div id="matrix-in-month"
-                                    class="text-right text-2xl text-green-600 font-black leading-none">0</div>
+                                <div id="matrix-in-month" class="text-right w-full">0</div>
                             </div>
                             <div class="flex justify-between items-start">
                                 <p class="text-lg font-bold text-gray-700">Outbound:</p>
-                                <div id="matrix-out-month"
-                                    class="text-right text-2xl text-purple-600 font-black leading-none">0</div>
+                                <div id="matrix-out-month" class="text-right w-full">0</div>
                             </div>
                         </div>
                     </div>
@@ -287,7 +281,6 @@
             }).catch(error => console.error("Failed to authenticate workspace:", error));
         }
 
-
         // --- 3. CLOCK & DATE LOGIC ---
         function updateClock() {
             const now = new Date();
@@ -360,6 +353,10 @@
 
             const weeklyThreshold = nowMs - (7 * 24 * 60 * 60 * 1000);
 
+            // Determine History Fetch Limit based on Tier (Saves DB Reads!)
+            const historyDaysLimit = currentShopTier === 'premium' ? 31 : 3;
+            const dynamicHistoryThreshold = nowMs - (historyDaysLimit * 24 * 60 * 60 * 1000);
+
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
             startOfMonth.setHours(0, 0, 0, 0);
             const monthlyThreshold = startOfMonth.getTime();
@@ -373,7 +370,6 @@
                 let deadStockList = [];
                 let staffInboundMap = {};
 
-                // Active Arrays for splitting
                 let actSpx = { today: 0, week: 0, month: 0 };
                 let actYoyi = { today: 0, week: 0, month: 0 };
 
@@ -407,7 +403,7 @@
                 } else {
                     document.getElementById('stat-spx').innerHTML = '<span class="text-xl">🔒</span>';
                     document.getElementById('stat-yoyi').innerHTML = '<span class="text-xl">🔒</span>';
-                    platformChart.data.datasets[0].data = [1]; // Solid grey circle
+                    platformChart.data.datasets[0].data = [1];
                     platformChart.data.datasets[0].backgroundColor = ['#e5e7eb'];
                 }
                 platformChart.update();
@@ -424,12 +420,11 @@
 
             // ISOLATED OUTBOUND SUMMARY LISTENER
             shopDB.collection("collected_parcels")
-                .where("collectedAt", ">=", monthlyThreshold)
+                .where("collectedAt", ">=", dynamicHistoryThreshold)
                 .onSnapshot((snapshot) => {
                     let staffOutboundMap = {};
                     let staffCollectedInboundMap = {};
 
-                    // Outbound and Intersecting Inbound Arrays for splitting
                     let outSpx = { today: 0, week: 0, month: 0 };
                     let outYoyi = { today: 0, week: 0, month: 0 };
                     let collInSpx = { today: 0, week: 0, month: 0 };
@@ -439,7 +434,6 @@
                         const data = doc.data();
                         const isYoyi = data.full_awb.startsWith('680');
 
-                        // Outbound Counter Windows
                         if (data.collectedAt >= dailyThreshold) {
                             isYoyi ? outYoyi.today++ : outSpx.today++;
                             const collector = data.collectedBy || 'Unknown';
@@ -448,7 +442,6 @@
                         if (data.collectedAt >= weeklyThreshold) isYoyi ? outYoyi.week++ : outSpx.week++;
                         if (data.collectedAt >= monthlyThreshold) isYoyi ? outYoyi.month++ : outSpx.month++;
 
-                        // Intersecting Inbound Windows
                         if (data.timestamp >= dailyThreshold) {
                             isYoyi ? collInYoyi.today++ : collInSpx.today++;
                             const scanner = data.scannedBy || 'Unknown';
@@ -469,7 +462,6 @@
         }
 
         function calculateMatrixTotals() {
-            // Default fallbacks if one database query loads faster than the other
             const actSpx = window.actSpx || { today: 0, week: 0, month: 0 };
             const actYoyi = window.actYoyi || { today: 0, week: 0, month: 0 };
             const cInSpx = window.collInSpx || { today: 0, week: 0, month: 0 };
@@ -478,7 +470,6 @@
             const oSpx = window.outSpx || { today: 0, week: 0, month: 0 };
             const oYoyi = window.outYoyi || { today: 0, week: 0, month: 0 };
 
-            // Calculate exact split metrics
             const metrics = {
                 in: {
                     day: { spx: actSpx.today + cInSpx.today, yoyi: actYoyi.today + cInYoyi.today },
@@ -492,41 +483,52 @@
                 }
             };
 
-            // Update Top Headline KPIs
             document.getElementById('kpi-inbound-today').textContent = metrics.in.day.spx + metrics.in.day.yoyi;
             document.getElementById('kpi-outbound-today').textContent = metrics.out.day.spx + metrics.out.day.yoyi;
 
-            // Render Dynamic Matrix DOM with Premium Gating
+            // Render Dynamic Matrix DOM with Premium Gating & Bigger Badges
             const updateMatrixDOM = (type, time, spx, yoyi) => {
                 const total = spx + yoyi;
                 let splitDisplay = '';
 
                 if (currentShopTier === 'premium') {
                     splitDisplay = `
-                        <p class="text-[10px] font-bold text-gray-400 uppercase mt-1 tracking-wide">
-                            <span class="text-orange-500">${spx}</span> SPX • <span class="text-green-500">${yoyi}</span> YOYI
-                        </p>
+                        <div class="flex items-center justify-end gap-2 mt-3">
+                            <span class="bg-orange-100 text-orange-800 text-sm md:text-base font-black px-2 py-1 rounded shadow-sm border border-orange-200">${spx} SPX</span>
+                            <span class="bg-green-100 text-green-800 text-sm md:text-base font-black px-2 py-1 rounded shadow-sm border border-green-200">${yoyi} YOYI</span>
+                        </div>
                     `;
                 } else {
                     splitDisplay = `
-                        <p class="text-[10px] font-bold text-yellow-700 uppercase mt-1 tracking-wide bg-yellow-100 border border-yellow-300 rounded px-1.5 py-0.5 inline-block shadow-sm">
-                            🔒 Premium: View Platform Split
-                        </p>
+                        <div class="mt-3 text-right">
+                            <span class="text-xs md:text-sm font-bold text-yellow-700 uppercase tracking-wide bg-yellow-100 border border-yellow-300 rounded px-2 py-1 shadow-sm">
+                                🔒 Premium Split
+                            </span>
+                        </div>
                     `;
                 }
 
                 document.getElementById(`matrix-${type}-${time}`).innerHTML = `
-                    ${total} 
+                    <div class="text-3xl md:text-4xl leading-none text-right font-black text-${type === 'in' ? 'green-600' : 'purple-600'}">${total}</div> 
                     ${splitDisplay}
                 `;
             };
 
             updateMatrixDOM('in', 'day', metrics.in.day.spx, metrics.in.day.yoyi);
             updateMatrixDOM('out', 'day', metrics.out.day.spx, metrics.out.day.yoyi);
-            updateMatrixDOM('in', 'week', metrics.in.week.spx, metrics.in.week.yoyi);
-            updateMatrixDOM('out', 'week', metrics.out.week.spx, metrics.out.week.yoyi);
-            updateMatrixDOM('in', 'month', metrics.in.month.spx, metrics.in.month.yoyi);
-            updateMatrixDOM('out', 'month', metrics.out.month.spx, metrics.out.month.yoyi);
+
+            if (currentShopTier === 'premium') {
+                updateMatrixDOM('in', 'week', metrics.in.week.spx, metrics.in.week.yoyi);
+                updateMatrixDOM('out', 'week', metrics.out.week.spx, metrics.out.week.yoyi);
+                updateMatrixDOM('in', 'month', metrics.in.month.spx, metrics.in.month.yoyi);
+                updateMatrixDOM('out', 'month', metrics.out.month.spx, metrics.out.month.yoyi);
+            } else {
+                const lockoutHTML = `<div class="text-center py-4 bg-gray-100 rounded-lg border border-gray-300 mt-2 h-full flex flex-col justify-center items-center"><span class="text-2xl block mb-1">🔒</span><span class="text-xs font-bold text-gray-500 uppercase">Premium: 30-Day History</span></div>`;
+                document.getElementById('matrix-in-week').parentElement.innerHTML = lockoutHTML;
+                document.getElementById('matrix-out-week').parentElement.innerHTML = lockoutHTML;
+                document.getElementById('matrix-in-month').parentElement.innerHTML = lockoutHTML;
+                document.getElementById('matrix-out-month').parentElement.innerHTML = lockoutHTML;
+            }
         }
 
         // --- 6. RENDERERS ---

@@ -317,7 +317,7 @@
                         currentShopTier = shopData.tier ? shopData.tier.toLowerCase() : 'basic';
                         document.title = `${shopData.shopName} - PUDO WMS`;
 
-                        // 2. Staff Profile Limits Enforcement
+                        // Staff Profile Limits Enforcement
                         let maxStaffAllowed = 3; // Basic default
                         if (currentShopTier === 'standard') maxStaffAllowed = 5;
                         if (currentShopTier === 'premium') maxStaffAllowed = 999; // Unlimited
@@ -365,6 +365,9 @@
                 if (user) {
                     // Device is unlocked cryptographically
                     document.getElementById('section-auth').classList.add('hidden');
+
+                    // Only fetch the shop rules and draw staff buttons AFTER the database is unlocked
+                    initializeSaaS();
 
                     if (!currentUser) {
                         // Show PIN screen for staff
@@ -606,14 +609,10 @@
                     const isYoyi = p.full_awb.startsWith('680');
                     const platformBadge = isYoyi ? '<span class="select-none bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="select-none bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
 
-                    // --- PLG FREEMIUM TEASE (INVENTORY) ---
+                    // PLG Freemium Tease: Basic gets masked names. Standard & Premium get full names.
                     let displayName = p.customerName ? p.customerName : '';
-                    if (displayName) {
-                        if (currentShopTier === 'basic') {
-                            displayName = '<span class="bg-yellow-100 text-yellow-800 border border-yellow-300 px-2 py-1 rounded text-[10px] font-black uppercase">🔒 Upgrade to reveal name</span>';
-                        } else if (currentShopTier === 'standard' && !p.full_awb.startsWith('680')) {
-                            displayName = '<span class="bg-yellow-100 text-yellow-800 border border-yellow-300 px-2 py-1 rounded text-[10px] font-black uppercase">🔒 Premium: SPX Names</span>';
-                        }
+                    if (displayName && currentShopTier === 'basic') {
+                        displayName = '<span class="bg-yellow-100 text-yellow-800 border border-yellow-300 px-2 py-1 rounded text-[10px] font-black uppercase">🔒 Upgrade to reveal name</span>';
                     }
                     const nameDisplay = displayName ? `<p class="text-sm font-bold text-blue-800 mt-1 truncate">${displayName}</p>` : '';
 
@@ -1079,14 +1078,10 @@
 
                     let relatedBadge = (!directMatches.has(data)) ? `<span class="select-none bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm border border-blue-200 shrink-0 uppercase">Auto-Found</span>` : '';
 
-                    // --- PLG FREEMIUM TEASE (OUTBOUND) ---
+                    // PLG Freemium Tease: Basic gets masked names. Standard & Premium get full names.
                     let displayName = data.customerName ? data.customerName : '';
-                    if (displayName) {
-                        if (currentShopTier === 'basic') {
-                            displayName = '<span class="bg-yellow-100 text-yellow-800 border border-yellow-400 px-3 py-1.5 rounded-lg text-sm font-black uppercase shadow-sm">🔒 Name Hidden - Upgrade</span>';
-                        } else if (currentShopTier === 'standard' && !awb.startsWith('680')) {
-                            displayName = '<span class="bg-yellow-100 text-yellow-800 border border-yellow-400 px-3 py-1.5 rounded-lg text-sm font-black uppercase shadow-sm">🔒 SPX Name - Premium</span>';
-                        }
+                    if (displayName && currentShopTier === 'basic') {
+                        displayName = '<span class="bg-yellow-100 text-yellow-800 border border-yellow-400 px-3 py-1.5 rounded-lg text-sm font-black uppercase shadow-sm">🔒 Name Hidden - Upgrade</span>';
                     }
 
                     const customerDisplay = displayName
@@ -1232,24 +1227,24 @@
                                 matchCount++;
                                 let parcelDetails = ''; let docIdsToMove = [];
 
-                                // --- PLG FREEMIUM TEASE (MULTI-PARCEL) ---
+                                // Determine the Header Name Mask
                                 let displayNameHeader = name;
                                 if (currentShopTier === 'basic') {
                                     displayNameHeader = '<span class="text-yellow-600 font-black text-xl">🔒 [CUSTOMER HIDDEN - UPGRADE]</span>';
-                                } else if (currentShopTier === 'standard' && !parcels[0].full_awb.startsWith('680')) {
-                                    displayNameHeader = '<span class="text-yellow-600 font-black text-xl">🔒 [SPX CUSTOMER - UPGRADE]</span>';
                                 }
 
                                 parcels.forEach(p => {
                                     docIdsToMove.push(p.id || p.full_awb);
 
+                                    // Apply the Freemium Mask to Data Points
                                     let displayLocation = p.location;
                                     let displayTracking = p.full_awb;
 
                                     if (currentShopTier === 'basic') {
-                                        displayLocation = '🔒 ***';
+                                        displayLocation = '🔒 ***'; // Basic gets nothing
                                         displayTracking = p.full_awb.substring(0, 3) + '******** 🔒';
                                     }
+                                    // Standard gets full tracking unmasked so they can actually auto-group accurately on the floor
 
                                     parcelDetails += `
                                     <div class="bg-gray-50 border border-gray-300 px-3 py-2 rounded flex justify-between items-center w-full">
@@ -1301,9 +1296,6 @@
                     alert("Error moving parcels: " + error.message);
                 }
             }
-
-            // --- SYSTEM BOOTSTRAP ---
-            window.onload = initializeSaaS;
 
         </script>
     </div>
