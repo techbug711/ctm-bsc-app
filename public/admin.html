@@ -122,8 +122,7 @@
                         </div>
                     </div>
                     <div class="p-6 flex flex-col justify-between">
-                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">This Month (Last 30
-                            Days)
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">This Month (Current)
                         </p>
                         <div class="space-y-1">
                             <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-month"
@@ -334,12 +333,22 @@
         // --- 5. ISOLATED SAAS ENGINE SYNCHRONIZATION ---
         function startAdminSync() {
             const nowMs = Date.now();
+            const now = new Date();
 
-            const startOfToday = new Date();
+            // Today: Midnight this morning
+            const startOfToday = new Date(now);
             startOfToday.setHours(0, 0, 0, 0);
             const dailyThreshold = startOfToday.getTime();
+
+            // This Week: Rolling 7 days back
             const weeklyThreshold = nowMs - (7 * 24 * 60 * 60 * 1000);
-            const monthlyThreshold = nowMs - (30 * 24 * 60 * 60 * 1000);
+
+            // This Month: The exact 1st day of the current calendar month
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            startOfMonth.setHours(0, 0, 0, 0);
+            const monthlyThreshold = startOfMonth.getTime();
+
+            // Dead Stock: Rolling 5 days back
             const deadStockThreshold = nowMs - (5 * 24 * 60 * 60 * 1000);
 
             let activeInboundToday = 0;
