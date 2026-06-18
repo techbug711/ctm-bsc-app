@@ -4,139 +4,195 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CollectCo WMS - Admin Dashboard</title>
+    <title>PUDO WMS - Admin Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body class="bg-gray-100 font-sans">
 
-    <div class="bg-gray-900 text-white p-4 md:p-6 shadow-lg flex justify-between items-center sticky top-0 z-50">
-        <div>
-            <h1 class="text-2xl md:text-3xl font-black tracking-tight text-blue-400">CollectCo Admin</h1>
-            <p class="text-gray-400 text-sm font-bold mt-1">Live Operational Dashboard</p>
-        </div>
-        <div class="text-right">
-            <p id="clockDisplay" class="text-xl md:text-2xl font-mono font-bold text-yellow-400">00:00:00</p>
-            <p id="dateDisplay" class="text-xs md:text-sm text-gray-400 font-bold uppercase"></p>
+    <div id="lockout-screen"
+        class="fixed inset-0 bg-gray-900 bg-opacity-95 z-[9999] flex flex-col items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl border-t-8 border-red-600">
+            <div class="text-6xl mb-4">⚠️</div>
+            <h1 class="text-3xl font-black text-gray-800 mb-2">Workspace Suspended</h1>
+            <p class="text-gray-500 font-bold mb-6">Access to this Smart WMS environment has been paused.</p>
+            <a href="https://wa.me/60182300788" target="_blank"
+                class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-md transition text-lg">
+                💬 Contact Admin to Renew
+            </a>
         </div>
     </div>
 
-    <div class="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+    <div id="tier-lockout-screen"
+        class="fixed inset-0 bg-gray-900 bg-opacity-95 z-[9999] flex flex-col items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-8 text-center shadow-2xl border-t-8 border-yellow-500">
+            <div class="text-6xl mb-4">🔒</div>
+            <h1 class="text-3xl font-black text-gray-800 mb-2">Upgrade Required</h1>
+            <p class="text-gray-500 font-bold mb-6">The Live Admin Dashboard is exclusively available for Standard and
+                Premium workspaces.</p>
+            <a href="https://wa.me/60182300788" target="_blank"
+                class="block w-full bg-yellow-500 hover:bg-yellow-600 text-white font-black py-4 rounded-xl shadow-md transition text-lg">
+                🚀 Upgrade Workspace
+            </a>
+        </div>
+    </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div class="bg-white p-6 rounded-xl border-l-8 border-blue-500 shadow-sm flex flex-col justify-center">
-                <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Total Active Inventory</p>
-                <p id="kpi-total-active" class="text-5xl font-black text-gray-800 mt-2">0</p>
+    <div id="section-auth" class="max-w-md mx-auto bg-white rounded-xl shadow-lg p-8 mt-20 text-center hidden">
+        <h1 class="text-3xl font-black text-blue-700 mb-2">PUDO WMS Admin</h1>
+        <p class="text-gray-500 font-bold mb-8">Secure Master Authentication</p>
+
+        <input type="email" id="authEmail" placeholder="Workspace Email"
+            class="w-full p-4 mb-4 border-2 border-gray-300 rounded-lg text-lg font-bold focus:border-blue-500 outline-none">
+        <input type="password" id="authPassword" placeholder="Password"
+            class="w-full p-4 mb-6 border-2 border-gray-300 rounded-lg text-lg font-bold focus:border-blue-500 outline-none">
+
+        <button onclick="loginMasterDevice()"
+            class="w-full bg-gray-900 text-white font-black py-4 text-xl rounded-lg hover:bg-black transition shadow-md">
+            🔒 Access Dashboard
+        </button>
+    </div>
+
+    <div id="admin-dashboard" class="hidden">
+        <div class="bg-gray-900 text-white p-4 md:p-6 shadow-lg flex justify-between items-center sticky top-0 z-50">
+            <div>
+                <h1 id="dashboard-title" class="text-2xl md:text-3xl font-black tracking-tight text-blue-400">CollectCo
+                    Admin</h1>
+                <p class="text-gray-400 text-sm font-bold mt-1">Live Operational Dashboard</p>
             </div>
-            <div class="bg-white p-6 rounded-xl border-l-8 border-green-500 shadow-sm flex flex-col justify-center">
-                <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Scanned In (Today)</p>
-                <p id="kpi-inbound-today" class="text-5xl font-black text-gray-800 mt-2">0</p>
-            </div>
-            <div class="bg-white p-6 rounded-xl border-l-8 border-purple-500 shadow-sm flex flex-col justify-center">
-                <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Collected Out (Today)</p>
-                <p id="kpi-outbound-today" class="text-5xl font-black text-gray-800 mt-2">0</p>
-            </div>
-            <div class="bg-white p-6 rounded-xl border-l-8 border-red-500 shadow-sm flex flex-col justify-center">
-                <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Dead Stock (> T+5 Days)</p>
-                <p id="kpi-dead-stock" class="text-5xl font-black text-red-600 mt-2">0</p>
+            <div class="text-right flex items-center gap-6">
+                <div>
+                    <p id="clockDisplay" class="text-xl md:text-2xl font-mono font-bold text-yellow-400">00:00:00</p>
+                    <p id="dateDisplay" class="text-xs md:text-sm text-gray-400 font-bold uppercase"></p>
+                </div>
+                <button onclick="logoutAdmin()"
+                    class="bg-gray-800 hover:bg-gray-700 text-xs font-bold px-4 py-2 rounded border border-gray-600 transition">Logout</button>
             </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div class="bg-gray-50 p-4 border-b border-gray-100">
-                <h3 class="text-lg font-bold text-gray-700 uppercase tracking-wide">📦 Periodic Volume Tracking Matrix
-                </h3>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100">
-                <div class="p-6 flex flex-col justify-between">
-                    <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Today (24 Hours)</p>
-                    <div class="space-y-1">
-                        <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-day"
-                                class="text-green-600 font-black">0</span></p>
-                        <p class="text-lg font-bold text-gray-700">Outbound: <span id="matrix-out-day"
-                                class="text-purple-600 font-black">0</span></p>
-                    </div>
+        <div class="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-white p-6 rounded-xl border-l-8 border-blue-500 shadow-sm flex flex-col justify-center">
+                    <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Total Active Inventory</p>
+                    <p id="kpi-total-active" class="text-5xl font-black text-gray-800 mt-2">0</p>
                 </div>
-                <div class="p-6 flex flex-col justify-between">
-                    <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">This Week (Last 7 Days)</p>
-                    <div class="space-y-1">
-                        <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-week"
-                                class="text-green-600 font-black">0</span></p>
-                        <p class="text-lg font-bold text-gray-700">Outbound: <span id="matrix-out-week"
-                                class="text-purple-600 font-black">0</span></p>
-                    </div>
+                <div class="bg-white p-6 rounded-xl border-l-8 border-green-500 shadow-sm flex flex-col justify-center">
+                    <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Scanned In (Today)</p>
+                    <p id="kpi-inbound-today" class="text-5xl font-black text-gray-800 mt-2">0</p>
                 </div>
-                <div class="p-6 flex flex-col justify-between">
-                    <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">This Month (Last 30 Days)
-                    </p>
-                    <div class="space-y-1">
-                        <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-month"
-                                class="text-green-600 font-black">0</span></p>
-                        <p class="text-lg font-bold text-gray-700">Outbound: <span id="matrix-out-month"
-                                class="text-purple-600 font-black">0</span></p>
-                    </div>
+                <div
+                    class="bg-white p-6 rounded-xl border-l-8 border-purple-500 shadow-sm flex flex-col justify-center">
+                    <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Collected Out (Today)</p>
+                    <p id="kpi-outbound-today" class="text-5xl font-black text-gray-800 mt-2">0</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl border-l-8 border-red-500 shadow-sm flex flex-col justify-center">
+                    <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Dead Stock (> T+5 Days)</p>
+                    <p id="kpi-dead-stock" class="text-5xl font-black text-red-600 mt-2">0</p>
                 </div>
             </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="bg-gray-50 p-4 border-b border-gray-100">
+                    <h3 class="text-lg font-bold text-gray-700 uppercase tracking-wide">📦 Periodic Volume Tracking
+                        Matrix
+                    </h3>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                    <div class="p-6 flex flex-col justify-between">
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Today (24 Hours)</p>
+                        <div class="space-y-1">
+                            <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-day"
+                                    class="text-green-600 font-black">0</span></p>
+                            <p class="text-lg font-bold text-gray-700">Outbound: <span id="matrix-out-day"
+                                    class="text-purple-600 font-black">0</span></p>
+                        </div>
+                    </div>
+                    <div class="p-6 flex flex-col justify-between">
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">This Week (Last 7 Days)
+                        </p>
+                        <div class="space-y-1">
+                            <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-week"
+                                    class="text-green-600 font-black">0</span></p>
+                            <p class="text-lg font-bold text-gray-700">Outbound: <span id="matrix-out-week"
+                                    class="text-purple-600 font-black">0</span></p>
+                        </div>
+                    </div>
+                    <div class="p-6 flex flex-col justify-between">
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">This Month (Last 30
+                            Days)
+                        </p>
+                        <div class="space-y-1">
+                            <p class="text-lg font-bold text-gray-700">Inbound: <span id="matrix-in-month"
+                                    class="text-green-600 font-black">0</span></p>
+                            <p class="text-lg font-bold text-gray-700">Outbound: <span id="matrix-out-month"
+                                    class="text-purple-600 font-black">0</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm lg:col-span-1 border border-gray-200">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4 uppercase tracking-wide">Platform Split (Active)
+                    </h3>
+                    <div class="relative h-64">
+                        <canvas id="platformChart"></canvas>
+                    </div>
+                    <div class="flex justify-between mt-4 border-t pt-4">
+                        <div class="text-center w-1/2 border-r">
+                            <p class="text-orange-600 font-black text-2xl" id="stat-spx">0</p>
+                            <p class="text-xs text-gray-500 font-bold">SPX</p>
+                        </div>
+                        <div class="text-center w-1/2">
+                            <p class="text-green-600 font-black text-2xl" id="stat-yoyi">0</p>
+                            <p class="text-xs text-gray-500 font-bold">YOYI</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm lg:col-span-2 border border-gray-200">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4 uppercase tracking-wide">Staff Leaderboard (Today's
+                        Actions)</h3>
+                    <div class="relative h-64 w-full">
+                        <canvas id="staffChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-red-800 uppercase tracking-wide">🚨 Dead Stock Hitlist (> T+5 Days
+                        Old)</h3>
+                    <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow">Requires
+                        Action</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b">
+                                <th class="p-4 font-bold">Days on Shelf</th>
+                                <th class="p-4 font-bold">Location</th>
+                                <th class="p-4 font-bold">Tracking Number</th>
+                                <th class="p-4 font-bold">Customer Name</th>
+                                <th class="p-4 font-bold">Scanned By</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deadStockTableBody" class="divide-y divide-gray-100">
+                            <tr>
+                                <td colspan="5" class="p-8 text-center text-gray-400 font-bold italic">Loading dead
+                                    stock
+                                    data...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="bg-white p-6 rounded-xl shadow-sm lg:col-span-1 border border-gray-200">
-                <h3 class="text-lg font-bold text-gray-800 mb-4 uppercase tracking-wide">Platform Split (Active)</h3>
-                <div class="relative h-64">
-                    <canvas id="platformChart"></canvas>
-                </div>
-                <div class="flex justify-between mt-4 border-t pt-4">
-                    <div class="text-center w-1/2 border-r">
-                        <p class="text-orange-600 font-black text-2xl" id="stat-spx">0</p>
-                        <p class="text-xs text-gray-500 font-bold">SPX</p>
-                    </div>
-                    <div class="text-center w-1/2">
-                        <p class="text-green-600 font-black text-2xl" id="stat-yoyi">0</p>
-                        <p class="text-xs text-gray-500 font-bold">YOYI</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white p-6 rounded-xl shadow-sm lg:col-span-2 border border-gray-200">
-                <h3 class="text-lg font-bold text-gray-800 mb-4 uppercase tracking-wide">Staff Leaderboard (Today's
-                    Actions)</h3>
-                <div class="relative h-64 w-full">
-                    <canvas id="staffChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div class="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">
-                <h3 class="text-lg font-bold text-red-800 uppercase tracking-wide">🚨 Dead Stock Hitlist (> T+5 Days
-                    Old)</h3>
-                <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow">Requires
-                    Action</span>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b">
-                            <th class="p-4 font-bold">Days on Shelf</th>
-                            <th class="p-4 font-bold">Location</th>
-                            <th class="p-4 font-bold">Tracking Number</th>
-                            <th class="p-4 font-bold">Customer Name</th>
-                            <th class="p-4 font-bold">Scanned By</th>
-                        </tr>
-                    </thead>
-                    <tbody id="deadStockTableBody" class="divide-y divide-gray-100">
-                        <tr>
-                            <td colspan="5" class="p-8 text-center text-gray-400 font-bold italic">Loading dead stock
-                                data...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
     </div>
 
     <script>
@@ -153,7 +209,68 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // --- 2. CLOCK & DATE LOGIC ---
+        // --- 2. SAAS ADMIN GATEKEEPER ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentShopId = urlParams.get('shop') || 'ctm_melewar';
+        const shopDB = db.collection("shops").doc(currentShopId);
+        let syncStarted = false;
+
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                document.getElementById('section-auth').classList.add('hidden');
+                initializeAdminSaaS();
+            } else {
+                document.getElementById('section-auth').classList.remove('hidden');
+                document.getElementById('admin-dashboard').classList.add('hidden');
+            }
+        });
+
+        function loginMasterDevice() {
+            const email = document.getElementById('authEmail').value;
+            const pass = document.getElementById('authPassword').value;
+            firebase.auth().signInWithEmailAndPassword(email, pass)
+                .catch(error => alert("Authentication Failed: " + error.message));
+        }
+
+        function logoutAdmin() {
+            firebase.auth().signOut();
+        }
+
+        function initializeAdminSaaS() {
+            shopDB.get().then((doc) => {
+                if (doc.exists) {
+                    const shopData = doc.data();
+                    const currentTime = Date.now();
+                    const expiryTimeMs = shopData.expiryDate.toMillis ? shopData.expiryDate.toMillis() : shopData.expiryDate;
+
+                    if (shopData.status !== 'active' || currentTime > expiryTimeMs) {
+                        document.getElementById('lockout-screen').classList.remove('hidden');
+                        return;
+                    }
+
+                    const currentShopTier = shopData.tier ? shopData.tier.toLowerCase() : 'basic';
+
+                    if (currentShopTier === 'basic') {
+                        document.getElementById('tier-lockout-screen').classList.remove('hidden');
+                        return;
+                    }
+
+                    document.title = `${shopData.shopName} - Admin Dashboard`;
+                    document.getElementById('dashboard-title').textContent = `${shopData.shopName} Admin`;
+                    document.getElementById('admin-dashboard').classList.remove('hidden');
+
+                    if (!syncStarted) {
+                        syncStarted = true;
+                        startAdminSync();
+                    }
+                } else {
+                    alert("System Error: Unregistered Workspace ID.");
+                }
+            }).catch(error => console.error("Failed to authenticate workspace:", error));
+        }
+
+
+        // --- 3. CLOCK & DATE LOGIC ---
         function updateClock() {
             const now = new Date();
             document.getElementById('clockDisplay').textContent = now.toLocaleTimeString('en-MY', { hour12: false });
@@ -162,7 +279,7 @@
         setInterval(updateClock, 1000);
         updateClock();
 
-        // --- 3. CHART SETUP ---
+        // --- 4. CHART SETUP ---
         const platformCtx = document.getElementById('platformChart').getContext('2d');
         const staffCtx = document.getElementById('staffChart').getContext('2d');
 
@@ -214,19 +331,15 @@
             }
         });
 
-        // --- 4. ENGINE SYNCHRONIZATION ---
+        // --- 5. ISOLATED SAAS ENGINE SYNCHRONIZATION ---
         function startAdminSync() {
             const nowMs = Date.now();
 
-            // Generate periodic window ranges
             const startOfToday = new Date();
             startOfToday.setHours(0, 0, 0, 0);
             const dailyThreshold = startOfToday.getTime();
             const weeklyThreshold = nowMs - (7 * 24 * 60 * 60 * 1000);
             const monthlyThreshold = nowMs - (30 * 24 * 60 * 60 * 1000);
-
-            // CORRECTION: T+5 structure. If day of inbound is T+0, then T+5 is exactly 5 days old.
-            // Items *more than* T+5 must be strictly older than 5 days.
             const deadStockThreshold = nowMs - (5 * 24 * 60 * 60 * 1000);
 
             let activeInboundToday = 0;
@@ -237,8 +350,8 @@
                 document.getElementById('matrix-in-day').textContent = activeInboundToday + collectedInboundToday;
             }
 
-            // ACTIVE INVENTORY LISTENER
-            db.collection("active_parcels").onSnapshot((snapshot) => {
+            // ISOLATED ACTIVE INVENTORY LISTENER
+            shopDB.collection("active_parcels").onSnapshot((snapshot) => {
                 let totalActive = 0;
                 activeInboundToday = 0;
                 let activeInboundWeek = 0;
@@ -256,7 +369,6 @@
                     const isYoyi = data.full_awb.startsWith('680');
                     if (isYoyi) yoyiCount++; else spxCount++;
 
-                    // Inbound filtering via historical timestamps
                     if (data.timestamp >= dailyThreshold) {
                         activeInboundToday++;
                         const staff = data.scannedBy || 'Unknown';
@@ -265,7 +377,6 @@
                     if (data.timestamp >= weeklyThreshold) activeInboundWeek++;
                     if (data.timestamp >= monthlyThreshold) activeInboundMonth++;
 
-                    // T+5 Evaluation: Timestamp is older than the 5-day cutoff threshold
                     if (data.timestamp < deadStockThreshold) {
                         deadStockList.push(data);
                     }
@@ -290,8 +401,8 @@
                 renderStaffChart();
             });
 
-            // OUTBOUND SUMMARY LISTENER (Pulls up to 30 days to compute matrix counts efficiently)
-            db.collection("collected_parcels")
+            // ISOLATED OUTBOUND SUMMARY LISTENER
+            shopDB.collection("collected_parcels")
                 .where("collectedAt", ">=", monthlyThreshold)
                 .onSnapshot((snapshot) => {
                     let outboundToday = 0;
@@ -308,7 +419,6 @@
                     snapshot.forEach(doc => {
                         const data = doc.data();
 
-                        // Outbound Counter Windows
                         if (data.collectedAt >= dailyThreshold) {
                             outboundToday++;
                             const collector = data.collectedBy || 'Unknown';
@@ -317,7 +427,6 @@
                         if (data.collectedAt >= weeklyThreshold) outboundWeek++;
                         if (data.collectedAt >= monthlyThreshold) outboundMonth++;
 
-                        // Intersecting Inbound Windows (Parcels scanned and checked out inside identical frames)
                         if (data.timestamp >= dailyThreshold) {
                             collectedInboundToday++;
                             const scanner = data.scannedBy || 'Unknown';
@@ -353,7 +462,7 @@
             document.getElementById('matrix-in-month').textContent = activeM + collM;
         }
 
-        // --- 5. RENDERERS ---
+        // --- 6. RENDERERS ---
         function renderStaffChart() {
             const activeInbound = window.latestStaffActiveInbound || {};
             const collectedInbound = window.latestStaffCollectedInbound || {};
@@ -406,7 +515,6 @@
             tbody.innerHTML = html;
         }
 
-        startAdminSync();
     </script>
 </body>
 
