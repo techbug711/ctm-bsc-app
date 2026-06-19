@@ -90,7 +90,7 @@
                     <p id="kpi-outbound-today" class="text-5xl font-black text-gray-800 mt-2">0</p>
                 </div>
                 <div class="bg-white p-6 rounded-xl border-l-8 border-red-500 shadow-sm flex flex-col justify-center">
-                    <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Dead Stock (> T+5 Days)</p>
+                    <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Dead Stock (> T+6 Days)</p>
                     <p id="kpi-dead-stock" class="text-5xl font-black text-red-600 mt-2">0</p>
                 </div>
             </div>
@@ -98,8 +98,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div class="bg-gray-50 p-4 border-b border-gray-100">
                     <h3 class="text-lg font-bold text-gray-700 uppercase tracking-wide">📦 Periodic Volume Tracking
-                        Matrix
-                    </h3>
+                        Matrix</h3>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100">
                     <div class="p-6 flex flex-col justify-between">
@@ -107,11 +106,11 @@
                         <div class="space-y-4">
                             <div class="flex justify-between items-start">
                                 <p class="text-lg font-bold text-gray-700">Inbound:</p>
-                                <div id="matrix-in-day" class="text-right">0</div>
+                                <div id="matrix-in-day" class="text-right w-full">0</div>
                             </div>
                             <div class="flex justify-between items-start">
                                 <p class="text-lg font-bold text-gray-700">Outbound:</p>
-                                <div id="matrix-out-day" class="text-right">0</div>
+                                <div id="matrix-out-day" class="text-right w-full">0</div>
                             </div>
                         </div>
                     </div>
@@ -176,7 +175,7 @@
 
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div class="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">
-                    <h3 class="text-lg font-bold text-red-800 uppercase tracking-wide">🚨 Dead Stock Hitlist (> T+5 Days
+                    <h3 class="text-lg font-bold text-red-800 uppercase tracking-wide">🚨 Dead Stock Hitlist (> T+6 Days
                         Old)</h3>
                     <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow">Requires
                         Action</span>
@@ -195,8 +194,7 @@
                         <tbody id="deadStockTableBody" class="divide-y divide-gray-100">
                             <tr>
                                 <td colspan="5" class="p-8 text-center text-gray-400 font-bold italic">Loading dead
-                                    stock
-                                    data...</td>
+                                    stock data...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -347,21 +345,26 @@
             const nowMs = Date.now();
             const now = new Date();
 
+            // Strict Calendar Today (Midnight to Midnight)
             const startOfToday = new Date(now);
             startOfToday.setHours(0, 0, 0, 0);
             const dailyThreshold = startOfToday.getTime();
 
-            const weeklyThreshold = nowMs - (7 * 24 * 60 * 60 * 1000);
+            // Strict Calendar 7-Day Window
+            const startOfWeek = new Date(startOfToday);
+            startOfWeek.setDate(startOfWeek.getDate() - 7);
+            const weeklyThreshold = startOfWeek.getTime();
 
-            // Determine History Fetch Limit based on Tier (Saves DB Reads!)
-            const historyDaysLimit = currentShopTier === 'premium' ? 31 : 3;
+            // Determine History Fetch Limit based on Tier
+            const historyDaysLimit = currentShopTier === 'premium' ? 31 : 7;
             const dynamicHistoryThreshold = nowMs - (historyDaysLimit * 24 * 60 * 60 * 1000);
 
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
             startOfMonth.setHours(0, 0, 0, 0);
             const monthlyThreshold = startOfMonth.getTime();
 
-            const deadStockThreshold = nowMs - (5 * 24 * 60 * 60 * 1000);
+            // Strictly T+6 Days and older
+            const deadStockThreshold = nowMs - (6 * 24 * 60 * 60 * 1000);
 
             // ISOLATED ACTIVE INVENTORY LISTENER
             shopDB.collection("active_parcels").onSnapshot((snapshot) => {
@@ -377,18 +380,21 @@
                     const data = doc.data();
                     totalActive++;
 
+                    // Normalize Timestamps
+                    const itemTime = data.timestamp?.toMillis ? data.timestamp.toMillis() : data.timestamp;
+
                     const isYoyi = data.full_awb.startsWith('680');
                     if (isYoyi) yoyiCount++; else spxCount++;
 
-                    if (data.timestamp >= dailyThreshold) {
+                    if (itemTime >= dailyThreshold) {
                         isYoyi ? actYoyi.today++ : actSpx.today++;
                         const staff = data.scannedBy || 'Unknown';
                         staffInboundMap[staff] = (staffInboundMap[staff] || 0) + 1;
                     }
-                    if (data.timestamp >= weeklyThreshold) isYoyi ? actYoyi.week++ : actSpx.week++;
-                    if (data.timestamp >= monthlyThreshold) isYoyi ? actYoyi.month++ : actSpx.month++;
+                    if (itemTime >= weeklyThreshold) isYoyi ? actYoyi.week++ : actSpx.week++;
+                    if (itemTime >= monthlyThreshold) isYoyi ? actYoyi.month++ : actSpx.month++;
 
-                    if (data.timestamp < deadStockThreshold) deadStockList.push(data);
+                    if (itemTime < deadStockThreshold) deadStockList.push(data);
                 });
 
                 document.getElementById('kpi-total-active').textContent = totalActive;
@@ -408,7 +414,11 @@
                 }
                 platformChart.update();
 
-                renderDeadStockTable(deadStockList.sort((a, b) => a.timestamp - b.timestamp));
+                renderDeadStockTable(deadStockList.sort((a, b) => {
+                    const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : a.timestamp;
+                    const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : b.timestamp;
+                    return timeA - timeB;
+                }));
 
                 window.latestStaffActiveInbound = staffInboundMap;
                 window.actSpx = actSpx;
@@ -434,21 +444,25 @@
                         const data = doc.data();
                         const isYoyi = data.full_awb.startsWith('680');
 
-                        if (data.collectedAt >= dailyThreshold) {
+                        // Normalize Timestamps
+                        const colTime = data.collectedAt?.toMillis ? data.collectedAt.toMillis() : data.collectedAt;
+                        const itemTime = data.timestamp?.toMillis ? data.timestamp.toMillis() : data.timestamp;
+
+                        if (colTime >= dailyThreshold) {
                             isYoyi ? outYoyi.today++ : outSpx.today++;
                             const collector = data.collectedBy || 'Unknown';
                             staffOutboundMap[collector] = (staffOutboundMap[collector] || 0) + 1;
                         }
-                        if (data.collectedAt >= weeklyThreshold) isYoyi ? outYoyi.week++ : outSpx.week++;
-                        if (data.collectedAt >= monthlyThreshold) isYoyi ? outYoyi.month++ : outSpx.month++;
+                        if (colTime >= weeklyThreshold) isYoyi ? outYoyi.week++ : outSpx.week++;
+                        if (colTime >= monthlyThreshold) isYoyi ? outYoyi.month++ : outSpx.month++;
 
-                        if (data.timestamp >= dailyThreshold) {
+                        if (itemTime >= dailyThreshold) {
                             isYoyi ? collInYoyi.today++ : collInSpx.today++;
                             const scanner = data.scannedBy || 'Unknown';
                             staffCollectedInboundMap[scanner] = (staffCollectedInboundMap[scanner] || 0) + 1;
                         }
-                        if (data.timestamp >= weeklyThreshold) isYoyi ? collInYoyi.week++ : collInSpx.week++;
-                        if (data.timestamp >= monthlyThreshold) isYoyi ? collInYoyi.month++ : collInSpx.month++;
+                        if (itemTime >= weeklyThreshold) isYoyi ? collInYoyi.week++ : collInSpx.week++;
+                        if (itemTime >= monthlyThreshold) isYoyi ? collInYoyi.month++ : collInSpx.month++;
                     });
 
                     window.latestStaffOutbound = staffOutboundMap;
@@ -517,15 +531,16 @@
             updateMatrixDOM('in', 'day', metrics.in.day.spx, metrics.in.day.yoyi);
             updateMatrixDOM('out', 'day', metrics.out.day.spx, metrics.out.day.yoyi);
 
+            // Standard & Premium both get the 7-Day view
+            updateMatrixDOM('in', 'week', metrics.in.week.spx, metrics.in.week.yoyi);
+            updateMatrixDOM('out', 'week', metrics.out.week.spx, metrics.out.week.yoyi);
+
+            // ONLY Premium gets the 30-Day Month view
             if (currentShopTier === 'premium') {
-                updateMatrixDOM('in', 'week', metrics.in.week.spx, metrics.in.week.yoyi);
-                updateMatrixDOM('out', 'week', metrics.out.week.spx, metrics.out.week.yoyi);
                 updateMatrixDOM('in', 'month', metrics.in.month.spx, metrics.in.month.yoyi);
                 updateMatrixDOM('out', 'month', metrics.out.month.spx, metrics.out.month.yoyi);
             } else {
-                const lockoutHTML = `<div class="text-center py-4 bg-gray-100 rounded-lg border border-gray-300 mt-2 h-full flex flex-col justify-center items-center"><span class="text-2xl block mb-1">🔒</span><span class="text-xs font-bold text-gray-500 uppercase">Premium: 30-Day History</span></div>`;
-                document.getElementById('matrix-in-week').parentElement.innerHTML = lockoutHTML;
-                document.getElementById('matrix-out-week').parentElement.innerHTML = lockoutHTML;
+                const lockoutHTML = `<div class="text-center py-4 bg-gray-100 rounded-lg border border-gray-300 mt-2 h-full flex flex-col justify-center items-center"><span class="text-2xl block mb-1">🔒</span><span class="text-xs font-bold text-gray-500 uppercase">Premium: 30-Day Analytics</span></div>`;
                 document.getElementById('matrix-in-month').parentElement.innerHTML = lockoutHTML;
                 document.getElementById('matrix-out-month').parentElement.innerHTML = lockoutHTML;
             }
@@ -564,7 +579,8 @@
 
             let html = '';
             deadStock.forEach(p => {
-                const daysOld = Math.floor((Date.now() - p.timestamp) / (1000 * 60 * 60 * 24));
+                const itemTime = p.timestamp?.toMillis ? p.timestamp.toMillis() : p.timestamp;
+                const daysOld = Math.floor((Date.now() - itemTime) / (1000 * 60 * 60 * 24));
                 const platformBadge = p.full_awb.startsWith('680')
                     ? '<span class="bg-green-100 text-green-800 text-[10px] px-2 py-0.5 rounded font-black ml-2 align-top uppercase">YOYI</span>'
                     : '<span class="bg-orange-100 text-orange-800 text-[10px] px-2 py-0.5 rounded font-black ml-2 align-top uppercase">SPX</span>';

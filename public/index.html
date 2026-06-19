@@ -304,10 +304,8 @@
                         const shopData = doc.data();
                         const currentTime = Date.now();
 
-                        // Safely parse Firebase Timestamp vs raw number
                         const expiryTimeMs = shopData.expiryDate.toMillis ? shopData.expiryDate.toMillis() : shopData.expiryDate;
 
-                        // Lockout Evaluation
                         if (shopData.status !== 'active' || currentTime > expiryTimeMs) {
                             document.getElementById('lockout-screen').classList.remove('hidden');
                             document.getElementById('saas-app').classList.add('hidden');
@@ -317,10 +315,9 @@
                         currentShopTier = shopData.tier ? shopData.tier.toLowerCase() : 'basic';
                         document.title = `${shopData.shopName} - PUDO WMS`;
 
-                        // Staff Profile Limits Enforcement
-                        let maxStaffAllowed = 3; // Basic default
+                        let maxStaffAllowed = 3;
                         if (currentShopTier === 'standard') maxStaffAllowed = 5;
-                        if (currentShopTier === 'premium') maxStaffAllowed = 999; // Unlimited
+                        if (currentShopTier === 'premium') maxStaffAllowed = 999;
 
                         const staffProfiles = shopData.staffProfiles || { "Staff 1": "1111", "Admin": "9999" };
                         let staffHTML = '';
@@ -337,12 +334,10 @@
 
                         for (const [name, pin] of Object.entries(staffProfiles)) {
                             if (name.toUpperCase() === 'ADMIN') {
-                                // Admin Dashboard is Standard & Premium only
                                 if (currentShopTier !== 'basic') {
                                     staffHTML += `<button onclick="loginWithPin('${name}', '${pin}')" class="w-full bg-gray-200 text-gray-800 font-bold text-xl py-4 rounded-lg hover:bg-gray-300 transition mt-4 border-2 border-gray-300 order-last">⚙️ ${name} Login</button>`;
                                 }
                             } else {
-                                // Enforce Staff Limits based on Tier
                                 if (staffCount < maxStaffAllowed) {
                                     const style = styleVariants[colorIndex % styleVariants.length];
                                     staffHTML += `<button onclick="loginWithPin('${name}', '${pin}')" class="w-full ${style} font-bold text-2xl py-6 rounded-lg transition border-2">🧑‍💻 Log in as ${name}</button>`;
@@ -363,19 +358,13 @@
             // --- FIREBASE AUTH MASTER LISTENER ---
             firebase.auth().onAuthStateChanged((user) => {
                 if (user) {
-                    // Device is unlocked cryptographically
                     document.getElementById('section-auth').classList.add('hidden');
-
-                    // Only fetch the shop rules and draw staff buttons AFTER the database is unlocked
                     initializeSaaS();
-
                     if (!currentUser) {
-                        // Show PIN screen for staff
                         document.getElementById('section-login').classList.remove('hidden');
                         document.getElementById('wms-ui').classList.add('hidden');
                     }
                 } else {
-                    // Device is locked/logged out
                     document.getElementById('section-auth').classList.remove('hidden');
                     document.getElementById('section-login').classList.add('hidden');
                     document.getElementById('wms-ui').classList.add('hidden');
@@ -386,12 +375,8 @@
                 const email = document.getElementById('authEmail').value;
                 const pass = document.getElementById('authPassword').value;
                 firebase.auth().signInWithEmailAndPassword(email, pass)
-                    .then(() => {
-                        console.log("Workspace Master Unlocked.");
-                    })
-                    .catch(error => {
-                        alert("Authentication Failed: " + error.message);
-                    });
+                    .then(() => console.log("Workspace Master Unlocked."))
+                    .catch(error => alert("Authentication Failed: " + error.message));
             }
 
             function lockMasterDevice() {
@@ -610,7 +595,6 @@
                     const isYoyi = p.full_awb.startsWith('680');
                     const platformBadge = isYoyi ? '<span class="select-none bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="select-none bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
 
-                    // PLG Freemium Tease: Basic gets masked names. Standard & Premium get full names.
                     let displayName = p.customerName ? p.customerName : '';
                     if (displayName && currentShopTier === 'basic') {
                         displayName = '<span class="bg-yellow-100 text-yellow-800 border border-yellow-300 px-2 py-1 rounded text-[10px] font-black uppercase">🔒 Upgrade to reveal name</span>';
@@ -1031,7 +1015,9 @@
                 allInventoryData.forEach(data => {
                     const awb = data.full_awb.toUpperCase();
                     const cleanAwb = awb.replace(/[A-Z]$/, '');
-                    const nameStr = data.customerName ? data.customerName.toUpperCase().trim() : '';
+
+                    // Strictly Case-Sensitive grouping for search
+                    const nameStr = data.customerName ? data.customerName.trim() : '';
 
                     let matchedQuery = null;
                     const isMatch = searchQueries.some(q => {
@@ -1042,14 +1028,14 @@
                     if (isMatch) {
                         data._matchedQuery = searchQueries.find(q => awb.includes(q.trim()) || nameStr.includes(q.trim()));
                         directMatches.add(data);
-                        if (data.customerName) namesToGroup.add(data.customerName.toUpperCase().trim());
+                        if (data.customerName) namesToGroup.add(data.customerName.trim());
                     }
                 });
 
                 let finalParcelsToDisplay = new Set([...directMatches]);
                 allInventoryData.forEach(data => {
                     if (data.customerName) {
-                        if (namesToGroup.has(data.customerName.toUpperCase().trim())) finalParcelsToDisplay.add(data);
+                        if (namesToGroup.has(data.customerName.trim())) finalParcelsToDisplay.add(data);
                     }
                 });
 
@@ -1080,7 +1066,6 @@
 
                     let relatedBadge = (!directMatches.has(data)) ? `<span class="select-none bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm border border-blue-200 shrink-0 uppercase">Auto-Found</span>` : '';
 
-                    // PLG Freemium Tease: Basic gets masked names. Standard & Premium get full names.
                     let displayName = data.customerName ? data.customerName : '';
                     if (displayName && currentShopTier === 'basic') {
                         displayName = '<span class="bg-yellow-100 text-yellow-800 border border-yellow-400 px-3 py-1.5 rounded-lg text-sm font-black uppercase shadow-sm">🔒 Name Hidden - Upgrade</span>';
@@ -1134,7 +1119,6 @@
                     if (card) card.remove();
                     currentDisplayedIds = currentDisplayedIds.filter(id => id !== awbId);
 
-                    // INSTANT TAG WIPE FIX
                     if (data && data._matchedQuery) {
                         const query = data._matchedQuery;
                         if (searchQueries.includes(query)) {
@@ -1213,7 +1197,7 @@
                     let groups = {};
                     allInventoryData.forEach(p => {
                         if (p.customerName) {
-                            let name = p.customerName.toUpperCase().trim();
+                            let name = p.customerName.trim(); // Strictly Case-Sensitive
                             if (!groups[name]) groups[name] = [];
                             groups[name].push(p);
                         }
@@ -1229,24 +1213,33 @@
                                 matchCount++;
                                 let parcelDetails = ''; let docIdsToMove = [];
 
-                                // Determine the Header Name Mask
-                                let displayNameHeader = name;
+                                // Platform Splitting Logic for the Header
+                                let hasSPX = false; let hasYOYI = false;
+                                parcels.forEach(p => {
+                                    if (p.full_awb.startsWith('680')) hasYOYI = true;
+                                    else hasSPX = true;
+                                });
+
+                                let groupBadge = '';
+                                if (hasSPX && hasYOYI) groupBadge = '<span class="bg-blue-100 text-blue-800 border border-blue-300 px-2 py-1 rounded text-xs font-black ml-3 uppercase align-middle shadow-sm">📦 MIXED</span>';
+                                else if (hasYOYI) groupBadge = '<span class="bg-green-100 text-green-800 border border-green-300 px-2 py-1 rounded text-xs font-black ml-3 uppercase align-middle shadow-sm">🟢 YOYI</span>';
+                                else groupBadge = '<span class="bg-orange-100 text-orange-800 border border-orange-300 px-2 py-1 rounded text-xs font-black ml-3 uppercase align-middle shadow-sm">🟠 SPX</span>';
+
+                                let displayNameHeader = `${name} ${groupBadge}`;
                                 if (currentShopTier === 'basic') {
-                                    displayNameHeader = '<span class="text-yellow-600 font-black text-xl">🔒 [CUSTOMER HIDDEN - UPGRADE]</span>';
+                                    displayNameHeader = `<span class="text-yellow-600 font-black text-xl">🔒 [CUSTOMER HIDDEN - UPGRADE]</span> ${groupBadge}`;
                                 }
 
                                 parcels.forEach(p => {
                                     docIdsToMove.push(p.id || p.full_awb);
 
-                                    // Apply the Freemium Mask to Data Points
                                     let displayLocation = p.location;
                                     let displayTracking = p.full_awb;
 
                                     if (currentShopTier === 'basic') {
-                                        displayLocation = '🔒 ***'; // Basic gets nothing
+                                        displayLocation = '🔒 ***';
                                         displayTracking = p.full_awb.substring(0, 3) + '******** 🔒';
                                     }
-                                    // Standard gets full tracking unmasked so they can actually auto-group accurately on the floor
 
                                     parcelDetails += `
                                     <div class="bg-gray-50 border border-gray-300 px-3 py-2 rounded flex justify-between items-center w-full">
