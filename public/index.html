@@ -604,7 +604,8 @@
 
                 parcels.forEach(p => {
                     const scannerName = p.scannedBy ? p.scannedBy : 'Unknown';
-                    const timeString = new Date(p.timestamp).toLocaleString('en-MY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const itemTime = p.timestamp?.toMillis ? p.timestamp.toMillis() : p.timestamp;
+                    const timeString = new Date(itemTime).toLocaleString('en-MY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
                     const isYoyi = p.full_awb.startsWith('680');
                     const platformBadge = isYoyi ? '<span class="select-none bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="select-none bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
@@ -710,7 +711,8 @@
                 let html = '';
 
                 parcels.forEach(p => {
-                    const timeString = new Date(p.collectedAt).toLocaleString('en-MY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const colTime = p.collectedAt?.toMillis ? p.collectedAt.toMillis() : p.collectedAt;
+                    const timeString = new Date(colTime).toLocaleString('en-MY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                     const customerDisplay = p.customerName ? `<span class="text-blue-800 font-black ml-2 block md:inline">${p.customerName}</span>` : '';
 
                     html += `
