@@ -931,7 +931,13 @@
                 isCameraActive = true;
 
                 html5QrCode.start(
-                    { facingMode: "environment" }, { fps: 10, qrbox: { width: 300, height: 300 } },
+                    { facingMode: "environment" },
+                    {
+                        fps: 30, // Triple the frame rate for instant detection
+                        qrbox: { width: 300, height: 150 }, // AWBs are rectangles, not squares. This reduces background noise.
+                        formatsToSupport: [Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39], // Stop algorithm from looking for QR codes
+                        disableFlip: true // Stop wasting CPU trying to read upside-down mirrored barcodes
+                    },
                     (decodedText) => {
                         if (isCameraCooldown) return;
                         isCameraCooldown = true;
