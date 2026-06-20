@@ -90,7 +90,7 @@
                     <p id="kpi-outbound-today" class="text-5xl font-black text-gray-800 mt-2">0</p>
                 </div>
                 <div class="bg-white p-6 rounded-xl border-l-8 border-red-500 shadow-sm flex flex-col justify-center">
-                    <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">Dead Stock (> T+6 Days)</p>
+                    <p class="text-gray-500 font-bold uppercase tracking-wide text-sm">RTS Hitlist (≥ T+6)</p>
                     <p id="kpi-dead-stock" class="text-5xl font-black text-red-600 mt-2">0</p>
                 </div>
             </div>
@@ -175,8 +175,8 @@
 
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div class="bg-red-50 p-4 border-b border-red-100 flex justify-between items-center">
-                    <h3 class="text-lg font-bold text-red-800 uppercase tracking-wide">🚨 Dead Stock Hitlist (> T+6 Days
-                        Old)</h3>
+                    <h3 class="text-lg font-bold text-red-800 uppercase tracking-wide">🚨 RTS Hitlist (Return to Sender
+                        ≥ T+6)</h3>
                     <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow">Requires
                         Action</span>
                 </div>
@@ -193,8 +193,8 @@
                         </thead>
                         <tbody id="deadStockTableBody" class="divide-y divide-gray-100">
                             <tr>
-                                <td colspan="5" class="p-8 text-center text-gray-400 font-bold italic">Loading dead
-                                    stock data...</td>
+                                <td colspan="5" class="p-8 text-center text-gray-400 font-bold italic">Loading RTS
+                                    data...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -372,8 +372,10 @@
             startOfMonth.setHours(0, 0, 0, 0);
             const monthlyThreshold = startOfMonth.getTime();
 
-            // Strictly T+6 Days and older
-            const deadStockThreshold = nowMs - (6 * 24 * 60 * 60 * 1000);
+            // Strictly Calendar RTS Threshold (T+6 or older)
+            // If today is T+0, T+5 starts exactly 5 calendar days ago at midnight.
+            // Anything older than the start of T+5 is strictly ≥ T+6.
+            const rtsThreshold = startOfToday.getTime() - (5 * 24 * 60 * 60 * 1000);
 
             // ISOLATED ACTIVE INVENTORY LISTENER
             shopDB.collection("active_parcels").onSnapshot((snapshot) => {
@@ -403,7 +405,7 @@
                     if (itemTime >= weeklyThreshold) isYoyi ? actYoyi.week++ : actSpx.week++;
                     if (itemTime >= monthlyThreshold) isYoyi ? actYoyi.month++ : actSpx.month++;
 
-                    if (itemTime < deadStockThreshold) deadStockList.push(data);
+                    if (itemTime < rtsThreshold) deadStockList.push(data);
                 });
 
                 document.getElementById('kpi-total-active').textContent = totalActive;
@@ -582,14 +584,25 @@
             const tbody = document.getElementById('deadStockTableBody');
 
             if (deadStock.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-green-600 font-bold text-lg">No dead stock! Racks are healthy. 🚀</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-green-600 font-bold text-lg">No RTS items! Racks are healthy. 🚀</td></tr>`;
                 return;
             }
 
             let html = '';
+
+            // Get today's calendar midnight for perfect T+ calculation
+            const todayMidnight = new Date();
+            todayMidnight.setHours(0, 0, 0, 0);
+            const todayMs = todayMidnight.getTime();
+
             deadStock.forEach(p => {
                 const itemTime = p.timestamp?.toMillis ? p.timestamp.toMillis() : p.timestamp;
-                const daysOld = Math.floor((Date.now() - itemTime) / (1000 * 60 * 60 * 24));
+
+                // Calculate calendar days difference (T+ value)
+                const itemDate = new Date(itemTime);
+                itemDate.setHours(0, 0, 0, 0);
+                const daysOld = Math.floor((todayMs - itemDate.getTime()) / (1000 * 60 * 60 * 24));
+
                 const platformBadge = p.full_awb.startsWith('680')
                     ? '<span class="bg-green-100 text-green-800 text-[10px] px-2 py-0.5 rounded font-black ml-2 align-top uppercase">YOYI</span>'
                     : '<span class="bg-orange-100 text-orange-800 text-[10px] px-2 py-0.5 rounded font-black ml-2 align-top uppercase">SPX</span>';
