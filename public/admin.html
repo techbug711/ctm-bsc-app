@@ -391,21 +391,26 @@
                     const data = doc.data();
                     totalActive++;
 
-                    // Normalize Timestamps
-                    const itemTime = data.timestamp?.toMillis ? data.timestamp.toMillis() : data.timestamp;
+                    // --- THE REAL FIX ---
+                    // Look for the immutable inboundAt field first. If it's an old parcel 
+                    // from before this update, safely fallback to the old timestamp.
+                    const physicalInboundTime = data.inboundAt ? data.inboundAt : (data.timestamp?.toMillis ? data.timestamp.toMillis() : data.timestamp);
 
-                    const isYoyi = data.full_awb.startsWith('680');
+                    // The volatile timer for RTS
+                    const rtsTime = data.timestamp?.toMillis ? data.timestamp.toMillis() : data.timestamp;
+
+                    const isYoyi = data.full_awb?.startsWith('680') || (doc.id && doc.id.startsWith('680'));
                     if (isYoyi) yoyiCount++; else spxCount++;
 
-                    if (itemTime >= dailyThreshold) {
+                    if (physicalInboundTime >= dailyThreshold) {
                         isYoyi ? actYoyi.today++ : actSpx.today++;
                         const staff = data.scannedBy || 'Unknown';
                         staffInboundMap[staff] = (staffInboundMap[staff] || 0) + 1;
                     }
-                    if (itemTime >= weeklyThreshold) isYoyi ? actYoyi.week++ : actSpx.week++;
-                    if (itemTime >= monthlyThreshold) isYoyi ? actYoyi.month++ : actSpx.month++;
+                    if (physicalInboundTime >= weeklyThreshold) isYoyi ? actYoyi.week++ : actSpx.week++;
+                    if (physicalInboundTime >= monthlyThreshold) isYoyi ? actYoyi.month++ : actSpx.month++;
 
-                    if (itemTime < rtsThreshold) deadStockList.push(data);
+                    if (rtsTime < rtsThreshold) deadStockList.push(data);
                 });
 
                 document.getElementById('kpi-total-active').textContent = totalActive;
