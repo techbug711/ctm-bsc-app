@@ -588,7 +588,9 @@
 
                 let spxCount = 0; let yoyiCount = 0;
                 allInventoryData.forEach(p => {
-                    if (p.full_awb.startsWith('680')) yoyiCount++; else spxCount++;
+                    // NUCLEAR SAFETY NET: Force string, default to empty
+                    const awb = p.full_awb ? String(p.full_awb) : "";
+                    if (awb.startsWith('680')) yoyiCount++; else spxCount++;
                 });
 
                 countDisplay.textContent = `Total: ${allInventoryData.length}`;
@@ -604,11 +606,15 @@
             function filterInventory() {
                 const query = document.getElementById('inventorySearchInput').value.toUpperCase();
                 const filtered = allInventoryData.filter(p => {
-                    const nameStr = p.customerName ? p.customerName.toUpperCase() : '';
-                    const matchesText = p.full_awb.includes(query) || p.location.includes(query) || nameStr.includes(query);
+                    // NUCLEAR SAFETY NET: Force strings
+                    const awb = p.full_awb ? String(p.full_awb).toUpperCase() : "";
+                    const loc = p.location ? String(p.location).toUpperCase() : "";
+                    const nameStr = p.customerName ? String(p.customerName).toUpperCase() : "";
+
+                    const matchesText = awb.includes(query) || loc.includes(query) || nameStr.includes(query);
 
                     let matchesPlatform = true;
-                    const isYoyi = p.full_awb.startsWith('680');
+                    const isYoyi = awb.startsWith('680');
                     if (currentInventoryFilter === 'SPX' && isYoyi) matchesPlatform = false;
                     if (currentInventoryFilter === 'YOYI' && !isYoyi) matchesPlatform = false;
                     return matchesText && matchesPlatform;
@@ -621,11 +627,13 @@
                 let html = '';
 
                 parcels.forEach(p => {
+                    // NUCLEAR SAFETY NET: Force strings
+                    const awb = p.full_awb ? String(p.full_awb) : "UNKNOWN_AWB";
                     const scannerName = p.scannedBy ? p.scannedBy : 'Unknown';
                     const itemTime = p.timestamp?.toMillis ? p.timestamp.toMillis() : p.timestamp;
                     const timeString = new Date(itemTime).toLocaleString('en-MY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-                    const isYoyi = p.full_awb.startsWith('680');
+                    const isYoyi = awb.startsWith('680');
                     const platformBadge = isYoyi ? '<span class="select-none bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="select-none bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
 
                     let displayName = p.customerName ? p.customerName : '';
@@ -636,7 +644,7 @@
 
                     let deleteBtn = '';
                     if (currentUser === 'Admin') {
-                        deleteBtn = `<button onclick="adminDeleteParcel('${p.id || p.full_awb}')" class="mt-4 text-sm bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 font-bold px-4 py-2 rounded border border-red-300 transition w-full shadow-sm">🗑️ Admin Delete</button>`;
+                        deleteBtn = `<button onclick="adminDeleteParcel('${p.id || awb}')" class="mt-4 text-sm bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 font-bold px-4 py-2 rounded border border-red-300 transition w-full shadow-sm">🗑️ Admin Delete</button>`;
                     }
 
                     html += `
@@ -644,7 +652,7 @@
                         <div class="flex justify-between items-start">
                             <div class="overflow-hidden w-full">
                                 <div class="flex justify-between">
-                                    <p class="text-3xl font-black text-purple-700">${p.location}</p>
+                                    <p class="text-3xl font-black text-purple-700">${p.location || "N/A"}</p>
                                     <div class="text-right text-xs text-gray-500 min-w-[80px]">
                                         <p class="font-bold text-gray-700">In: ${scannerName}</p>
                                         <p>${timeString}</p>
@@ -652,7 +660,7 @@
                                 </div>
                                 ${nameDisplay}
                                 <p class="text-sm text-gray-800 font-bold uppercase tracking-wider mt-1 break-words">
-                                    <span class="select-all cursor-pointer">${p.full_awb}</span>${platformBadge}
+                                    <span class="select-all cursor-pointer">${awb}</span>${platformBadge}
                                 </p>
                             </div>
                         </div>
