@@ -410,7 +410,8 @@
                     if (physicalInboundTime >= weeklyThreshold) isYoyi ? actYoyi.week++ : actSpx.week++;
                     if (physicalInboundTime >= monthlyThreshold) isYoyi ? actYoyi.month++ : actSpx.month++;
 
-                    if (rtsTime < rtsThreshold) deadStockList.push(data);
+                    // THE FIX: Judge RTS strictly by the true physical inbound time
+                    if (physicalInboundTime < rtsThreshold) deadStockList.push(data);
                 });
 
                 document.getElementById('kpi-total-active').textContent = totalActive;
@@ -601,7 +602,8 @@
             const todayMs = todayMidnight.getTime();
 
             deadStock.forEach(p => {
-                const itemTime = p.timestamp?.toMillis ? p.timestamp.toMillis() : p.timestamp;
+                // THE FIX: Calculate days old using the permanent physical timestamp
+                const itemTime = p.inboundAt ? p.inboundAt : (p.timestamp?.toMillis ? p.timestamp.toMillis() : p.timestamp);
 
                 // Calculate calendar days difference (T+ value)
                 const itemDate = new Date(itemTime);
