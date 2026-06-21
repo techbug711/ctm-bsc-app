@@ -307,11 +307,11 @@
             };
             firebase.initializeApp(firebaseConfig);
             const db = firebase.firestore();
-            // ENABLE FIREBASE OFFLINE CACHE (Massive Cost Saver)
-            db.enablePersistence({ synchronizeTabs: true })
+            // ENABLE FIREBASE OFFLINE CACHE (PWA Optimized - Single Window)
+            db.enablePersistence()
                 .catch((err) => {
                     if (err.code == 'failed-precondition') {
-                        console.warn("Multiple tabs open, persistence enabled in first tab only.");
+                        console.warn("Multiple windows open, persistence failed.");
                     } else if (err.code == 'unimplemented') {
                         console.warn("Browser doesn't support offline persistence.");
                     }
@@ -900,7 +900,8 @@
                         last5: extractedLast5,
                         last6: extractedLast6,
                         location: assignedLocation,
-                        timestamp: Date.now(),
+                        inboundAt: Date.now(), // THE FIX: Immutable physical arrival time
+                        timestamp: Date.now(), // The volatile RTS timer
                         scannedBy: currentUser
                     });
 
