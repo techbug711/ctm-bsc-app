@@ -432,7 +432,12 @@
                         parcels.push(data);
                     });
 
-                    allInventoryData = parcels.sort((a, b) => a.location.localeCompare(b.location, undefined, { numeric: true, sensitivity: 'base' }));
+                    // SAFETY NET: If a parcel is missing a location, default it to "UNKNOWN" so the app doesn't crash
+                    allInventoryData = parcels.sort((a, b) => {
+                        const locA = a.location || "UNKNOWN";
+                        const locB = b.location || "UNKNOWN";
+                        return locA.localeCompare(locB, undefined, { numeric: true, sensitivity: 'base' });
+                    });
 
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
                     if (!document.getElementById('section-bulk').classList.contains('hidden')) loadBulkTab();
