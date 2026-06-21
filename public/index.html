@@ -624,7 +624,6 @@
                 const rtsThreshold = startOfToday.getTime() - (5 * 24 * 60 * 60 * 1000);
 
                 const filtered = allInventoryData.filter(p => {
-                    // NUCLEAR SAFETY NET: Force strings
                     const awb = p.full_awb ? String(p.full_awb).toUpperCase() : "";
                     const loc = p.location ? String(p.location).toUpperCase() : "";
                     const nameStr = p.customerName ? String(p.customerName).toUpperCase() : "";
@@ -636,11 +635,14 @@
 
                     let isRts = false;
                     let itemTime;
-                    if (p.arrive_date) {
-                        itemTime = p.arrive_date?.toMillis ? p.arrive_date.toMillis() : p.arrive_date;
+
+                    // THE FIX: Parse the string arrive_date exactly like admin.html does
+                    if (p.arrive_date && p.arrive_date !== '-') {
+                        itemTime = new Date(p.arrive_date + 'T00:00:00+08:00').getTime();
                     } else {
                         itemTime = p.inboundAt ? p.inboundAt : (p.timestamp?.toMillis ? p.timestamp.toMillis() : p.timestamp);
                     }
+
                     if (itemTime < rtsThreshold) isRts = true;
 
                     if (currentInventoryFilter === 'SPX' && isYoyi) matchesPlatform = false;
@@ -661,7 +663,6 @@
                 const todayMs = todayMidnight.getTime();
 
                 parcels.forEach(p => {
-                    // NUCLEAR SAFETY NET: Force strings
                     const awb = p.full_awb ? String(p.full_awb) : "UNKNOWN_AWB";
                     const scannerName = p.scannedBy ? p.scannedBy : 'Unknown';
                     const scanTime = p.timestamp?.toMillis ? p.timestamp.toMillis() : p.timestamp;
@@ -677,8 +678,10 @@
                     const nameDisplay = displayName ? `<p class="text-sm font-bold text-blue-800 mt-1 truncate">${displayName}</p>` : '';
 
                     let itemTime;
-                    if (p.arrive_date) {
-                        itemTime = p.arrive_date?.toMillis ? p.arrive_date.toMillis() : p.arrive_date;
+
+                    // THE FIX: Parse the string arrive_date for the T+ Badges
+                    if (p.arrive_date && p.arrive_date !== '-') {
+                        itemTime = new Date(p.arrive_date + 'T00:00:00+08:00').getTime();
                     } else {
                         itemTime = p.inboundAt ? p.inboundAt : (p.timestamp?.toMillis ? p.timestamp.toMillis() : p.timestamp);
                     }
