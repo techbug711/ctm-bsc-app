@@ -768,7 +768,7 @@
                 const listDiv = document.getElementById('historyList');
                 listDiv.innerHTML = '<p class="text-center font-bold text-gray-500 py-8">Loading history...</p>';
                 try {
-                    // THE FIX: Add { source: 'server' } to completely bypass the stale offline cache
+                    // Pull the data directly from the server, bypassing offline cache
                     const snapshot = await shopDB.collection("collected_parcels")
                         .orderBy("collectedAt", "desc")
                         .limit(50)
@@ -782,6 +782,15 @@
 
                     let parcels = [];
                     snapshot.forEach(doc => parcels.push(doc.data()));
+
+                    // 🛡️ THE FIX: Force a strict local chronological sort 
+                    // This unifies Firebase Timestamps and Javascript Numbers instantly
+                    parcels.sort((a, b) => {
+                        const timeA = a.collectedAt?.toMillis ? a.collectedAt.toMillis() : (a.collectedAt || 0);
+                        const timeB = b.collectedAt?.toMillis ? b.collectedAt.toMillis() : (b.collectedAt || 0);
+                        return timeB - timeA; // Descending (Newest collections at the top)
+                    });
+
                     allHistoryData = parcels;
                     renderHistoryList(parcels);
                 } catch (e) {
