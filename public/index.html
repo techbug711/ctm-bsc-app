@@ -678,8 +678,6 @@
                     const nameDisplay = displayName ? `<p class="text-sm font-bold text-blue-800 mt-1 truncate">${displayName}</p>` : '';
 
                     let itemTime;
-
-                    // THE FIX: Parse the string arrive_date for the T+ Badges
                     if (p.arrive_date && p.arrive_date !== '-') {
                         itemTime = new Date(p.arrive_date + 'T00:00:00+08:00').getTime();
                     } else {
@@ -692,14 +690,40 @@
 
                     let cardStyle = "bg-white border-2 border-gray-200";
                     let rtsBadge = "";
+                    let rtsActionArea = ""; // THE NEW HYBRID BUTTON AREA
+
                     if (daysOld >= 6) {
                         cardStyle = "bg-red-50 border-2 border-red-400 shadow-md";
                         rtsBadge = `<span class="bg-red-600 text-white text-[10px] px-2 py-1 rounded font-black uppercase ml-2 shadow-sm animate-pulse">T+${daysOld} (RTS)</span>`;
+
+                        if (p.location !== 'RTS-BOX') {
+                            // State 1: Still on the physical rack -> Show both options
+                            rtsActionArea = `
+                            <div class="flex flex-col gap-2 mt-4">
+                                <button onclick="moveToRtsBox('${p.id || awb}', '${awb}')" class="text-sm bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-3 rounded-lg transition w-full shadow-sm flex items-center justify-center gap-2 border border-orange-800">
+                                    📦 Move to RTS BOX
+                                </button>
+                                <button onclick="handoverRtsToCourier('${p.id || awb}', '${awb}')" class="text-sm bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-3 rounded-lg transition w-full shadow-sm flex items-center justify-center gap-2 border border-red-800">
+                                    🚚 Hand to Courier
+                                </button>
+                            </div>`;
+                        } else {
+                            // State 2: Already in the transit box -> Just show final handover
+                            rtsActionArea = `
+                            <div class="flex flex-col gap-2 mt-4">
+                                <div class="text-sm bg-orange-100 text-orange-800 font-black px-4 py-2 rounded-lg text-center border-2 border-orange-300">
+                                    ✅ IN RTS BOX
+                                </div>
+                                <button onclick="handoverRtsToCourier('${p.id || awb}', '${awb}')" class="text-sm bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-3 rounded-lg transition w-full shadow-sm flex items-center justify-center gap-2 border border-red-800">
+                                    🚚 Hand to Courier
+                                </button>
+                            </div>`;
+                        }
                     }
 
                     let deleteBtn = '';
                     if (typeof currentUser !== 'undefined' && currentUser === 'Admin') {
-                        deleteBtn = `<button onclick="adminDeleteParcel('${p.id || awb}')" class="mt-4 text-sm bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 font-bold px-4 py-2 rounded border border-red-300 transition w-full shadow-sm">🗑️ Admin Delete</button>`;
+                        deleteBtn = `<button onclick="adminDeleteParcel('${p.id || awb}')" class="mt-2 text-sm bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 font-bold px-4 py-2 rounded border border-red-300 transition w-full shadow-sm">🗑️ Admin Delete</button>`;
                     }
 
                     html += `
@@ -721,7 +745,10 @@
                                 </div>
                             </div>
                         </div>
-                        ${deleteBtn}
+                        <div class="mt-auto flex flex-col gap-1">
+                            ${rtsActionArea}
+                            ${deleteBtn}
+                        </div>
                     </div>
                 `;
                 });
@@ -762,6 +789,59 @@
                     }
                 }
             }
+
+            // ==========================================
+            // --- HYBRID RTS ENGINE (TRANSIT & HANDOVER)
+            // ==========================================
+
+            // 1. Move to physical transit box
+            async function moveToRtsBox(docId, awb) {
+                if (!confirm(`Are you sure you moved ${awb} into the physical RTS Box?`)) return;
+
+                try {
+                    const docRef = shopDB.collection("active_parcels").doc(docId);
+
+                    // Update location to the transit box
+                    await docRef.update({
+                        location: 'RTS-BOX',
+                        rtsPackedBy: typeof currentUser !== 'undefined' && currentUser ? currentUser : 'Unknown',
+                        rtsPackedAt: Date.now()
+                    });
+
+                } catch (error) {
+                    alert("Error moving parcel: " + error.message);
+                }
+            }
+
+            // 2. Final handover to courier (Moves to History)
+            async function handoverRtsToCourier(docId, awb) {
+                if (!confirm(`Confirm handover of RTS parcel ${awb} to the courier? This removes it from active inventory.`)) return;
+
+                try {
+                    const docRef = shopDB.collection("active_parcels").doc(docId);
+                    const snap = await docRef.get();
+
+                    if (snap.exists) {
+                        const data = snap.data();
+                        data.collectedAt = Date.now();
+
+                        // Tag it uniquely so Admin can differentiate RTS from normal pickups
+                        const staffName = typeof currentUser !== 'undefined' && currentUser ? currentUser : 'Unknown';
+                        data.collectedBy = `RTS Courier (${staffName})`;
+
+                        const batch = db.batch();
+                        batch.set(shopDB.collection("collected_parcels").doc(docId), data);
+                        batch.delete(docRef);
+                        await batch.commit();
+
+                    } else {
+                        alert("Parcel not found. It may have already been collected.");
+                    }
+                } catch (error) {
+                    alert("Error during courier handover: " + error.message);
+                }
+            }
+
 
             // --- HISTORY LOGIC ---
             async function loadHistory() {
