@@ -974,6 +974,35 @@
                 }
             }
 
+            // --- THE MISSING FIX: VARIABLE GEOMETRY ENGINE ---
+            function advanceToNextSlot() {
+                let r = rackPrefix.value.toUpperCase();
+                let l = parseInt(levelCounter.value);
+                let s = parseInt(slotCounter.value);
+
+                // Default standard rack geometry
+                let maxSlotsPerLevel = 12;
+
+                // Specific Variable Geometry for Rack H
+                if (r === 'H' && (l === 0 || l === 1)) {
+                    maxSlotsPerLevel = 2; // H-0 and H-1 only have 2 slots
+                }
+
+                s++; // Step over 1 slot
+
+                // If we hit the end of the shelf, reset to slot 1 and go up a level
+                if (s > maxSlotsPerLevel) {
+                    s = 1;
+                    l++;
+                }
+
+                slotCounter.value = s;
+                levelCounter.value = l;
+
+                applySmartDefaults();
+                refreshSlotData();
+            }
+
             async function refreshSlotData() {
                 localStorage.setItem('wms_rack', rackPrefix.value.toUpperCase());
                 localStorage.setItem('wms_level', levelCounter.value);
@@ -1086,8 +1115,7 @@
 
                     if (currentItemsInSlot >= parseInt(slotCapacity.value)) {
                         playSlotFullChime();
-                        slotCounter.value = parseInt(slotCounter.value) + 1;
-                        applySmartDefaults(); refreshSlotData();
+                        advanceToNextSlot(); // Triggers the unified geometry engine
                     } else {
                         playSuccessBeep();
                         capacityDisplay.textContent = `Item ${currentItemsInSlot} of ${slotCapacity.value} currently in slot`;
