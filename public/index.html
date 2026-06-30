@@ -1115,10 +1115,12 @@
 
             // --- SMART SaaS DEFAULTS (ISOLATED BY CLIENT) ---
             function applySmartDefaults() {
-                const r = rackPrefix.value.toUpperCase();
-                const l = parseInt(levelCounter.value);
-                const s = parseInt(slotCounter.value);
-
+                // --- 1. STICKY CAPACITY LOCK ---
+                // If staff manually typed a capacity, lock it in and ignore hardcoded defaults
+                if (window.manualCapacityOverride) {
+                    slotCapacity.value = window.manualCapacityOverride;
+                    return;
+                }
                 // Check which client is logged in
                 if (typeof currentShopId !== 'undefined' && currentShopId === 'parcelhub_ddamai') {
                     // Parcelhub uses giant physical boxes
@@ -1250,9 +1252,49 @@
                 }
             }
 
-            rackPrefix.addEventListener('input', () => { applySmartDefaults(); refreshSlotData(); });
-            levelCounter.addEventListener('change', () => { applySmartDefaults(); refreshSlotData(); });
-            slotCounter.addEventListener('change', () => { applySmartDefaults(); refreshSlotData(); });
+            // --- AUTO-JUMP & STICKY LISTENERS ---
+
+            rackPrefix.addEventListener('input', function () {
+                // Force uppercase and strip out any accidental numbers/symbols
+                this.value = this.value.replace(/[^A-Za-z]/g, '').toUpperCase();
+                applySmartDefaults();
+                refreshSlotData();
+
+                // Auto-jump to Level if 1 letter is typed
+                if (this.value.length === 1) {
+                    levelCounter.focus();
+                    levelCounter.select(); // Highlights the number so they can overwrite it instantly
+                }
+            });
+
+            levelCounter.addEventListener('input', function () {
+                // Strip out any accidental letters/symbols
+                this.value = this.value.replace(/[^0-9]/g, '');
+                applySmartDefaults();
+                refreshSlotData();
+
+                // Auto-jump to Slot if 1 digit is typed
+                if (this.value.length === 1) {
+                    slotCounter.focus();
+                    slotCounter.select();
+                }
+            });
+
+            slotCounter.addEventListener('change', () => {
+                applySmartDefaults();
+                refreshSlotData();
+            });
+
+            slotCapacity.addEventListener('input', function () {
+                // If staff deletes the number, unlock the system to return to Smart Defaults
+                if (this.value === "") {
+                    window.manualCapacityOverride = null;
+                } else {
+                    // Lock in their custom limit for all subsequent slots
+                    window.manualCapacityOverride = this.value;
+                }
+            });
+
             slotCapacity.addEventListener('change', refreshSlotData);
 
             function manageFocusState(inputElement) {
