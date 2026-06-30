@@ -725,6 +725,9 @@
                         }
                     }
 
+                    // THE NEW MOVE BUTTON
+                    let moveBtn = `<button onclick="moveParcel('${p.id || awb}', '${p.location}', '${awb}')" class="mt-2 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold px-4 py-2 rounded border border-blue-300 transition w-full shadow-sm flex items-center justify-center gap-2">🔄 Move to New Slot</button>`;
+
                     let deleteBtn = '';
                     if (typeof currentUser !== 'undefined' && currentUser === 'Admin') {
                         deleteBtn = `<button onclick="adminDeleteParcel('${p.id || awb}')" class="mt-2 text-sm bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-800 font-bold px-4 py-2 rounded border border-red-300 transition w-full shadow-sm">🗑️ Admin Delete</button>`;
@@ -750,6 +753,7 @@
                             </div>
                         </div>
                         <div class="mt-auto flex flex-col gap-1">
+                            ${moveBtn}
                             ${rtsActionArea}
                             ${deleteBtn}
                         </div>
@@ -793,6 +797,35 @@
                     }
                 }
             }
+
+            // --- RELOCATE PARCEL ENGINE ---
+            async function moveParcel(docId, currentLocation, awb) {
+                // Quick, lightweight browser prompt (no complex modals needed)
+                const newLocation = prompt(`MOVE PARCEL: ${awb}\n\nCurrent Location: ${currentLocation}\n\nEnter the new Rack/Slot (e.g., B-2-1):`);
+
+                if (!newLocation) return; // Cancelled or left blank
+
+                const cleanLocation = newLocation.trim().toUpperCase();
+
+                if (cleanLocation === currentLocation.toUpperCase()) {
+                    alert("Parcel is already at that location.");
+                    return;
+                }
+
+                try {
+                    // Update only the location field, preserving all timestamps and history
+                    await shopDB.collection("active_parcels").doc(docId).update({
+                        location: cleanLocation
+                    });
+
+                    // No need to call a refresh function; your real-time snapshot listener 
+                    // will instantly detect the change and update the UI automatically!
+
+                } catch (error) {
+                    alert("Error moving parcel: " + error.message);
+                }
+            }
+
 
             // ==========================================
             // --- HYBRID RTS ENGINE (TRANSIT & HANDOVER)
