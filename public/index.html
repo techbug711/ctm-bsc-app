@@ -285,10 +285,14 @@
                         </button>
                     </div>
 
-                    <input type="text" id="historySearchInput" autocomplete="off"
-                        placeholder="🔍 Search History by Tracking or Name..."
-                        class="w-full p-4 border-2 border-gray-300 rounded-lg text-lg uppercase font-bold focus:border-gray-500 focus:outline-none shadow-inner"
-                        oninput="filterHistory()">
+                    <form onsubmit="searchDeepHistory(event)" class="flex gap-2 mb-4">
+                        <input type="text" id="historySearchInput" placeholder="Scan or type exact AWB..."
+                            class="w-full px-4 py-2 border-2 border-gray-300 rounded focus:border-blue-500 focus:outline-none uppercase font-bold text-gray-700">
+                        <button type="submit"
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded shadow-md border border-blue-800">
+                            Search
+                        </button>
+                    </form>
                 </div>
 
                 <div id="historyList" class="space-y-4">
@@ -944,6 +948,85 @@
                 }
             }
 
+            // --- HISTORY DEEP SEARCH ENGINE ---
+            async function searchDeepHistory(event) {
+                // Prevent the page from reloading if triggered by a form submission
+                if (event) event.preventDefault();
+
+                // Assuming your history search input has this ID
+                const searchInput = document.getElementById('historySearchInput');
+                if (!searchInput) return;
+
+                const query = searchInput.value.trim().toUpperCase();
+                if (!query) {
+                    alert("Please enter a Tracking Number (AWB) to search.");
+                    return;
+                }
+
+                const listDiv = document.getElementById('historyList'); // Adjust ID to match your history container
+                listDiv.innerHTML = '<p class="text-center font-bold text-blue-600 py-8 animate-pulse">Deep Searching Firebase...</p>';
+
+                try {
+                    // Fire a targeted query to the server for the exact AWB
+                    const snap = await shopDB.collection("collected_parcels")
+                        .where("full_awb", "==", query)
+                        .get({ source: 'server' });
+
+                    if (snap.empty) {
+                        listDiv.innerHTML = `<p class="text-center font-bold text-red-500 py-8">No historical record found for AWB: ${query}</p>`;
+                        return;
+                    }
+
+                    let html = '';
+                    snap.forEach(doc => {
+                        const p = doc.data();
+
+                        // Formatting the timestamps
+                        const inTime = p.inboundAt ? new Date(p.inboundAt).toLocaleString('en-MY') : 'Unknown';
+                        const outTime = p.collectedAt ? new Date(p.collectedAt).toLocaleString('en-MY') : 'Unknown';
+
+                        // Build the historical card (Customize this HTML to match your existing design)
+                        html += `
+                        <div class="bg-gray-100 border-2 border-gray-300 p-4 rounded-lg flex flex-col justify-between mb-4 shadow-sm">
+                            <div class="flex justify-between border-b border-gray-300 pb-2 mb-2">
+                                <div>
+                                    <p class="text-xs text-gray-500 font-bold uppercase">Tracking Number</p>
+                                    <p class="text-lg font-black text-gray-800">${p.full_awb}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-xs text-gray-500 font-bold uppercase">Customer</p>
+                                    <p class="text-md font-bold text-blue-800">${p.customerName || 'N/A'}</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 text-sm mt-2">
+                                <div>
+                                    <p class="text-xs text-gray-500 font-bold">Inbound</p>
+                                    <p class="font-bold text-gray-700">${inTime}</p>
+                                    <p class="text-xs text-gray-500">By: ${p.scannedBy || 'Unknown'}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500 font-bold">Handover</p>
+                                    <p class="font-bold text-green-700">${outTime}</p>
+                                    <p class="text-xs text-gray-500">By: ${p.collectedBy || 'Unknown'}</p>
+                                </div>
+                            </div>
+                        </div>`;
+                    });
+
+                    // Add a "Clear Search" button to return to the standard 50 recent items
+                    html += `
+                    <button onclick="fetchHistory()" class="mt-4 bg-gray-600 hover:bg-gray-700 text-white font-bold px-4 py-2 rounded shadow transition w-full">
+                        ⬅️ Back to Recent History
+                    </button>`;
+
+                    listDiv.innerHTML = html;
+
+                } catch (error) {
+                    console.error("Deep search failed: ", error);
+                    listDiv.innerHTML = '<p class="text-center font-bold text-red-600 py-8">Search failed. Please check your connection.</p>';
+                }
+            }
+
             // --- INBOUND LOGIC ---
             const rackPrefix = document.getElementById('rackPrefix');
             const levelCounter = document.getElementById('levelCounter');
@@ -962,42 +1045,106 @@
                 return `${rackPrefix.value.toUpperCase()}-${levelCounter.value}-${slotCounter.value}`;
             }
 
+            // --- SMART SaaS DEFAULTS (ISOLATED BY CLIENT) ---
             function applySmartDefaults() {
                 const r = rackPrefix.value.toUpperCase();
                 const l = parseInt(levelCounter.value);
                 const s = parseInt(slotCounter.value);
 
-                if (r === 'H' && l === 2 && s >= 1 && s <= 12) {
-                    slotCapacity.value = 15;
-                } else if (r === 'H' && (l === 0 || l === 1) && (s === 1 || s === 2)) {
-                    slotCapacity.value = 30;
+                // Check which client is logged in
+                if (typeof currentShopId !== 'undefined' && currentShopId === 'parcelhub_ddamai') {
+                    // Parcelhub uses giant physical boxes
+                    slotCapacity.value = 35;
+                } else {
+                    // COLLECTCO DEFAULT CAPACITY
+                    slotCapacity.value = 10;
+
+                    // CollectCo Advanced Geometry Overrides
+                    if (r === 'C' || r === 'D') {
+                        slotCapacity.value = 3; // Racks C and D only hold 3
+                    } else if (r === 'H') {
+                        // Previous H Rack rules
+                        if (l === 2 && s >= 1 && s <= 12) {
+                            slotCapacity.value = 15;
+                        } else if ((l === 0 || l === 1) && (s === 1 || s === 2)) {
+                            slotCapacity.value = 30;
+                        }
+                    }
                 }
             }
 
-            // --- THE MISSING FIX: VARIABLE GEOMETRY ENGINE ---
+            // --- ADVANCED GEOMETRY PROGRESSION ENGINE ---
             function advanceToNextSlot() {
                 let r = rackPrefix.value.toUpperCase();
                 let l = parseInt(levelCounter.value);
                 let s = parseInt(slotCounter.value);
 
-                // Default standard rack geometry
-                let maxSlotsPerLevel = 12;
-
-                // Specific Variable Geometry for Rack H
-                if (r === 'H' && (l === 0 || l === 1)) {
-                    maxSlotsPerLevel = 2; // H-0 and H-1 only have 2 slots
-                }
-
-                s++; // Step over 1 slot
-
-                // If we hit the end of the shelf, reset to slot 1 and go up a level
-                if (s > maxSlotsPerLevel) {
+                if (typeof currentShopId !== 'undefined' && currentShopId === 'parcelhub_ddamai') {
+                    // Parcelhub jumps directly to the next physical Bin (e.g. A-1-1 hits 35 -> Jumps to B-1-1)
+                    let charCode = r.charCodeAt(0);
+                    r = (charCode >= 65 && charCode < 90) ? String.fromCharCode(charCode + 1) : 'A';
+                    l = 1;
                     s = 1;
-                    l++;
+                } else {
+                    // COLLECTCO CUSTOM WAREHOUSE BLUEPRINT
+                    if (r === 'A' || r === 'B') {
+                        // 10 Slots per level
+                        if (s < 10) {
+                            s++;
+                        } else {
+                            s = 1; // Reset slot
+                            if (r === 'A') {
+                                r = 'B';
+                                l = 1;
+                            } else if (r === 'B') {
+                                r = 'C';
+                                l = 0; // Rack C starts at level 0
+                            }
+                        }
+                    }
+                    else if (r === 'C' || r === 'D') {
+                        // 1 Slot per level, Levels 0 to 3
+                        if (l < 3) {
+                            l++;
+                            s = 1; // Force slot to 1
+                        } else {
+                            s = 1; // Reset slot
+                            if (r === 'C') {
+                                r = 'D';
+                                l = 0; // Rack D starts at level 0
+                            } else if (r === 'D') {
+                                r = 'E';
+                                l = 1; // Rack E defaults back to level 1
+                            }
+                        }
+                    }
+                    else if (r === 'H') {
+                        // Existing Rack H blueprint
+                        if (l === 0 || l === 1) {
+                            if (s < 2) s++; else { s = 1; l++; }
+                        } else if (l === 2) {
+                            if (s < 12) s++; else { s = 1; l = 1; r = 'I'; }
+                        } else {
+                            s++;
+                        }
+                    }
+                    else {
+                        // Standard generic fallback for E, F, G, I, etc.
+                        if (s < 10) {
+                            s++;
+                        } else {
+                            s = 1;
+                            l = 1;
+                            let charCode = r.charCodeAt(0);
+                            r = (charCode >= 65 && charCode < 90) ? String.fromCharCode(charCode + 1) : 'A';
+                        }
+                    }
                 }
 
-                slotCounter.value = s;
+                // Update the inputs on the screen
+                rackPrefix.value = r;
                 levelCounter.value = l;
+                slotCounter.value = s;
 
                 applySmartDefaults();
                 refreshSlotData();
