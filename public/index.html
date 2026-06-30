@@ -241,10 +241,18 @@
                             onclick="setInventoryFilter('RTS')">🚨 RTS</button>
                     </div>
 
-                    <input type="text" id="inventorySearchInput" autocomplete="off"
-                        placeholder="🔍 Search Location (e.g., I-1-2) or Tracking..."
-                        class="w-full p-4 border-2 border-purple-300 rounded-lg text-lg uppercase font-bold focus:border-purple-600 focus:outline-none shadow-inner"
-                        oninput="filterInventory()">
+                    <div class="flex flex-col md:flex-row gap-2 mb-4">
+                        <input type="text" id="inventorySearchInput" autocomplete="off"
+                            placeholder="  Search Location or Tracking..."
+                            class="w-full md:w-3/4 p-4 border-2 border-purple-300 rounded-lg text-lg uppercase font-bold focus:border-purple-600 focus:outline-none shadow-inner"
+                            oninput="filterInventory()">
+                        <select id="inventorySortSelect" onchange="setInventorySort(this.value)"
+                            class="w-full md:w-1/4 p-4 border-2 border-purple-300 rounded-lg text-lg font-bold text-purple-900 bg-purple-50 focus:border-purple-600 focus:outline-none shadow-inner cursor-pointer">
+                            <option value="LOCATION">🔤 Rack (A-Z)</option>
+                            <option value="OLDEST">⏳ Oldest First</option>
+                            <option value="NEWEST">✨ Newest First</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div id="inventoryList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -427,7 +435,14 @@
 
             let allInventoryData = [];
             let currentInventoryFilter = 'ALL';
+            let currentInventorySort = 'LOCATION'; // THE NEW STATE
             let allHistoryData = [];
+
+            // --- THE NEW SORT TRIGGER ---
+            function setInventorySort(sortMode) {
+                currentInventorySort = sortMode;
+                filterInventory(); // Instantly apply the new sort
+            }
 
             // --- REAL-TIME DATABASE SYNC ---
             function startRealTimeSync() {
@@ -655,6 +670,26 @@
 
                     return matchesText && matchesPlatform;
                 });
+                // --- THE NEW TIME-BASED SORTING ENGINE ---
+                filtered.sort((a, b) => {
+                    if (currentInventorySort === 'LOCATION') {
+                        // Standard Alphabetical Rack Sort
+                        const locA = a.location || "UNKNOWN";
+                        const locB = b.location || "UNKNOWN";
+                        return locA.localeCompare(locB, undefined, { numeric: true, sensitivity: 'base' });
+                    } else {
+                        // Time-based Sort: Unify Firebase Timestamps and Unix Epochs
+                        const timeA = a.inboundAt ? a.inboundAt : (a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp || 0));
+                        const timeB = b.inboundAt ? b.inboundAt : (b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp || 0));
+
+                        if (currentInventorySort === 'NEWEST') {
+                            return timeB - timeA; // High to low (Newest at top)
+                        } else if (currentInventorySort === 'OLDEST') {
+                            return timeA - timeB; // Low to high (Oldest at top)
+                        }
+                    }
+                });
+
                 renderInventoryList(filtered);
             }
 
