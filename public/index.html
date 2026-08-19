@@ -447,27 +447,58 @@
                 filterInventory(); // Instantly apply the new sort
             }
 
-            // --- REAL-TIME DATABASE SYNC ---
+            // --- REAL-TIME DATABASE SYNC (TAB-AWARE) ---
+            // The onSnapshot listener is the #1 Firebase cost driver.
+            // It's only attached on STOCK and OUT tabs (where fresh data matters).
+            // Detached on IN/MULTI/HIST to avoid paying for snapshots during rapid scanning.
+            let activeParcelListener = null;
+
             function startRealTimeSync() {
-                console.log("📡 Starting real-time sync with shelves...");
-                shopDB.collection("active_parcels").onSnapshot((snapshot) => {
+                console.log("📡 Fetching initial inventory data...");
+                // Initial fetch to populate allInventoryData (one-time read)
+                shopDB.collection("active_parcels").get().then((snapshot) => {
                     let parcels = [];
                     snapshot.forEach(doc => {
                         const data = doc.data();
                         data.id = doc.id;
                         parcels.push(data);
                     });
-
-                    // SAFETY NET: If a parcel is missing a location, default it to "UNKNOWN" so the app doesn't crash
                     allInventoryData = parcels.sort((a, b) => {
                         const locA = a.location || "UNKNOWN";
                         const locB = b.location || "UNKNOWN";
                         return locA.localeCompare(locB, undefined, { numeric: true, sensitivity: 'base' });
                     });
+                    if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
+                    if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
+                }).catch((error) => console.error("Initial fetch error:", error));
+            }
 
+            function attachActiveParcelListener() {
+                if (activeParcelListener) return; // already attached
+                console.log("📡 Attaching real-time listener...");
+                activeParcelListener = shopDB.collection("active_parcels").onSnapshot((snapshot) => {
+                    let parcels = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        data.id = doc.id;
+                        parcels.push(data);
+                    });
+                    allInventoryData = parcels.sort((a, b) => {
+                        const locA = a.location || "UNKNOWN";
+                        const locB = b.location || "UNKNOWN";
+                        return locA.localeCompare(locB, undefined, { numeric: true, sensitivity: 'base' });
+                    });
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
                     if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
                 }, (error) => console.error("Firebase Sync Error: ", error));
+            }
+
+            function detachActiveParcelListener() {
+                if (activeParcelListener) {
+                    console.log("📡 Detaching real-time listener (tab not needed).");
+                    activeParcelListener();
+                    activeParcelListener = null;
+                }
             }
 
             // --- SHIFT LOGIN LOGIC ---
@@ -489,6 +520,7 @@
 
             function logout() {
                 currentUser = null;
+                detachActiveParcelListener();
                 document.getElementById('wms-ui').classList.add('hidden');
                 document.getElementById('section-login').classList.remove('hidden');
                 clearSearch();
@@ -574,6 +606,14 @@
                     if (tab === 'inbound') document.getElementById('awbInput').focus();
                     if (tab === 'outbound') document.getElementById('searchInput').focus();
                 }
+
+                // --- TAB-AWARE LISTENER: only pay for real-time sync when needed ---
+                if (tab === 'inventory' || tab === 'outbound') {
+                    attachActiveParcelListener();
+                } else {
+                    detachActiveParcelListener();
+                }
+
                 if (tab === 'inventory') {
                     document.getElementById('inventorySearchInput').value = '';
                     loadInventory();
