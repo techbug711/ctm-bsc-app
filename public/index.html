@@ -1568,6 +1568,20 @@
                     currentDisplayedIds.push(docId);
                     currentDisplayedData[docId] = data;
 
+                    // --- RTS DETECTION (same T+6 rule as inventory) ---
+                    let itemTime;
+                    if (data.arrive_date && data.arrive_date !== '-') {
+                        itemTime = new Date(data.arrive_date + 'T00:00:00+08:00').getTime();
+                    } else {
+                        itemTime = data.inboundAt ? data.inboundAt : (data.timestamp?.toMillis ? data.timestamp.toMillis() : data.timestamp);
+                    }
+                    const todayMidnight = new Date();
+                    todayMidnight.setHours(0, 0, 0, 0);
+                    const itemDate = new Date(itemTime);
+                    itemDate.setHours(0, 0, 0, 0);
+                    const daysOld = Math.floor((todayMidnight.getTime() - itemDate.getTime()) / (1000 * 60 * 60 * 24));
+                    const isRts = daysOld >= 6;
+
                     const isYoyi = awb.startsWith('680');
                     const platformBadge = isYoyi ? '<span class="select-none bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="select-none bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
 
@@ -1594,9 +1608,19 @@
                        </div>`
                         : `<p class="text-sm font-bold text-gray-400 mb-2 italic">No name data yet</p>`;
 
+                    // Dominant RTS banner + red card styling
+                    const rtsBanner = isRts
+                        ? `<div class="bg-red-600 text-white font-black text-center py-2 px-3 rounded-lg mb-3 text-lg md:text-xl shadow-md animate-pulse flex items-center justify-center gap-2">
+                               🚨 RTS — T+${daysOld} DAYS
+                           </div>`
+                        : '';
+                    const cardBorder = isRts ? 'border-red-500 border-4' : 'border-gray-300 border-2';
+                    const cardBg = isRts ? 'bg-red-50' : 'bg-gray-50';
+
                     resultsHTML += `
-                    <div class="bg-gray-50 border-2 border-gray-300 p-4 md:p-6 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4" id="card-${docId}">
+                    <div class="${cardBg} ${cardBorder} p-4 md:p-6 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4" id="card-${docId}">
                         <div class="w-full overflow-hidden">
+                            ${rtsBanner}
                             ${customerDisplay}
                             <p class="text-sm text-gray-500 font-bold uppercase tracking-wider mt-1 break-words">
                                 Tracking: <span class="text-gray-900 font-black text-lg select-all break-all">${displayAwb}</span>${platformBadge}
