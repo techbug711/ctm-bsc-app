@@ -337,6 +337,8 @@
             let currentShopId = null;
             let currentShopTier = 'basic';
             let shopDB = null;
+            let currentRackLayout = null; // loaded from Firebase shops/<id>.rackLayout
+            let zoneCapacityOverride = {}; // { zoneId: capacityValue } — zone-wide manual override
 
             function initializeSaaS() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -357,6 +359,7 @@
                         }
 
                         currentShopTier = shopData.tier ? shopData.tier.toLowerCase() : 'basic';
+                        currentRackLayout = shopData.rackLayout || null;
                         document.title = `${shopData.shopName} - PUDO WMS`;
 
                         let maxStaffAllowed = 3;
@@ -1119,108 +1122,88 @@
                 return `${rackPrefix.value.toUpperCase()}-${levelCounter.value}-${slotCounter.value}`;
             }
 
-            // --- SMART SaaS DEFAULTS (ISOLATED BY CLIENT) ---
-            function applySmartDefaults() {
-                // --- 1. STICKY CAPACITY LOCK ---
-                // If staff manually typed a capacity, lock it in and ignore hardcoded defaults
-                if (window.manualCapacityOverride) {
-                    slotCapacity.value = window.manualCapacityOverride;
-                    return;
-                }
-                // Check which client is logged in
-                if (typeof currentShopId !== 'undefined' && currentShopId === 'parcelhub_ddamai') {
-                    // Parcelhub uses giant physical boxes
-                    slotCapacity.value = 35;
-                } else {
-                    // COLLECTCO DEFAULT CAPACITY
-                    slotCapacity.value = 10;
-
-                    // CollectCo Advanced Geometry Overrides
-                    if (r === 'C' || r === 'D') {
-                        slotCapacity.value = 3; // Racks C and D only hold 3
-                    } else if (r === 'H') {
-                        // Previous H Rack rules
-                        if (l === 2 && s >= 1 && s <= 12) {
-                            slotCapacity.value = 15;
-                        } else if ((l === 0 || l === 1) && (s === 1 || s === 2)) {
-                            slotCapacity.value = 30;
-                        }
-                    }
-                }
+            // --- DATA-DRIVEN RACK LAYOUT ENGINE (SaaS) ---
+            // rackLayout is loaded from Firebase (shops/<id>.rackLayout) and has:
+            //   zones: [{ id, label, segments: [{rack, level}, ...] }, ...]
+            //   racks: { A: { levels: { "1": { maxSlots, capacity } } }, ... }
+            function getZoneForLocation(rack, level) {
+                if (!currentRackLayout || !Array.isArray(currentRackLayout.zones)) return null;
+                return currentRackLayout.zones.find(z =>
+                    Array.isArray(z.segments) && z.segments.some(seg => seg.rack === rack && seg.level === level)
+                ) || null;
             }
 
-            // --- ADVANCED GEOMETRY PROGRESSION ENGINE ---
-            function advanceToNextSlot() {
-                let r = rackPrefix.value.toUpperCase();
-                let l = parseInt(levelCounter.value);
-                let s = parseInt(slotCounter.value);
+            function getLevelConfig(rack, level) {
+                if (!currentRackLayout || !currentRackLayout.racks) return null;
+                const rackCfg = currentRackLayout.racks[rack];
+                if (!rackCfg || !rackCfg.levels) return null;
+                return rackCfg.levels[String(level)] || null;
+            }
 
-                if (typeof currentShopId !== 'undefined' && currentShopId === 'parcelhub_ddamai') {
-                    // Parcelhub jumps directly to the next physical Bin (e.g. A-1-1 hits 35 -> Jumps to B-1-1)
-                    let charCode = r.charCodeAt(0);
-                    r = (charCode >= 65 && charCode < 90) ? String.fromCharCode(charCode + 1) : 'A';
-                    l = 1;
-                    s = 1;
-                } else {
-                    // COLLECTCO CUSTOM WAREHOUSE BLUEPRINT
-                    if (r === 'A' || r === 'B') {
-                        // 10 Slots per level
-                        if (s < 10) {
-                            s++;
-                        } else {
-                            s = 1; // Reset slot
-                            if (r === 'A') {
-                                r = 'B';
-                                l = 1;
-                            } else if (r === 'B') {
-                                r = 'C';
-                                l = 0; // Rack C starts at level 0
-                            }
-                        }
-                    }
-                    else if (r === 'C' || r === 'D') {
-                        // 1 Slot per level, Levels 0 to 3
-                        if (l < 3) {
-                            l++;
-                            s = 1; // Force slot to 1
-                        } else {
-                            s = 1; // Reset slot
-                            if (r === 'C') {
-                                r = 'D';
-                                l = 0; // Rack D starts at level 0
-                            } else if (r === 'D') {
-                                r = 'E';
-                                l = 1; // Rack E defaults back to level 1
-                            }
-                        }
-                    }
-                    else if (r === 'H') {
-                        // Existing Rack H blueprint
-                        if (l === 0 || l === 1) {
-                            if (s < 2) s++; else { s = 1; l++; }
-                        } else if (l === 2) {
-                            if (s < 12) s++; else { s = 1; l = 1; r = 'I'; }
-                        } else {
-                            s++;
-                        }
-                    }
-                    else {
-                        // Standard generic fallback for E, F, G, I, etc.
-                        if (s < 10) {
-                            s++;
-                        } else {
-                            s = 1;
-                            l = 1;
-                            let charCode = r.charCodeAt(0);
-                            r = (charCode >= 65 && charCode < 90) ? String.fromCharCode(charCode + 1) : 'A';
-                        }
-                    }
+            function getCurrentZone() {
+                return getZoneForLocation(rackPrefix.value.toUpperCase(), parseInt(levelCounter.value));
+            }
+
+            // --- SMART SaaS DEFAULTS (DATA-DRIVEN) ---
+            function applySmartDefaults() {
+                const r = rackPrefix.value.toUpperCase();
+                const l = parseInt(levelCounter.value);
+                const zone = getZoneForLocation(r, l);
+
+                // 1. Zone-wide manual override wins
+                if (zone && zoneCapacityOverride[zone.id]) {
+                    slotCapacity.value = zoneCapacityOverride[zone.id];
+                    return;
                 }
 
-                // Update the inputs on the screen
-                rackPrefix.value = r;
-                levelCounter.value = l;
-                slotCounter.value = s;
+                // 2. Firebase rackLayout config
+                const cfg = getLevelConfig(r, l);
+                if (cfg && cfg.capacity) {
+                    slotCapacity.value = cfg.capacity;
+                    return;
+                }
+
+                // 3. Fallback default
+                slotCapacity.value = 10;
+            }
+
+            // --- ZONE-AWARE PROGRESSION ENGINE ---
+            function advanceToNextSlot() {
+                const r = rackPrefix.value.toUpperCase();
+                const l = parseInt(levelCounter.value);
+                const s = parseInt(slotCounter.value);
+
+                const zone = getZoneForLocation(r, l);
+
+                if (!zone || !Array.isArray(zone.segments) || zone.segments.length === 0) {
+                    // No zone config — simple slot increment fallback
+                    slotCounter.value = s + 1;
+                    applySmartDefaults();
+                    refreshSlotData();
+                    return;
+                }
+
+                let segIndex = zone.segments.findIndex(seg => seg.rack === r && seg.level === l);
+                if (segIndex === -1) segIndex = 0;
+
+                const seg = zone.segments[segIndex];
+                const cfg = getLevelConfig(seg.rack, seg.level);
+                const maxSlots = (cfg && cfg.maxSlots) ? cfg.maxSlots : 1;
+
+                if (s < maxSlots) {
+                    // Next slot within the same segment
+                    slotCounter.value = s + 1;
+                } else if (segIndex < zone.segments.length - 1) {
+                    // Move to the next segment in this zone
+                    const nextSeg = zone.segments[segIndex + 1];
+                    rackPrefix.value = nextSeg.rack;
+                    levelCounter.value = nextSeg.level;
+                    slotCounter.value = 1;
+                } else {
+                    // Last slot of the last segment — zone is full, stop
+                    capacityDisplay.innerHTML = `<span class="text-red-600 font-black">ZONE FULL — no more slots in this zone.</span>`;
+                    return;
+                }
 
                 applySmartDefaults();
                 refreshSlotData();
@@ -1292,12 +1275,13 @@
             });
 
             slotCapacity.addEventListener('input', function () {
-                // If staff deletes the number, unlock the system to return to Smart Defaults
+                const zone = getCurrentZone();
                 if (this.value === "") {
-                    window.manualCapacityOverride = null;
+                    // Cleared — remove the zone-wide override, return to Firebase defaults
+                    if (zone) delete zoneCapacityOverride[zone.id];
                 } else {
-                    // Lock in their custom limit for all subsequent slots
-                    window.manualCapacityOverride = this.value;
+                    // Lock in a zone-wide custom limit (applies to all slots in this zone)
+                    if (zone) zoneCapacityOverride[zone.id] = this.value;
                 }
             });
 
