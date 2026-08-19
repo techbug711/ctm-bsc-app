@@ -1329,8 +1329,7 @@
 
                 let isValidFormat = false;
                 let invalidReason = "";
-                let cleanAwb = awb;
-                if (awb.startsWith("MY") && /[A-Z]$/.test(awb)) cleanAwb = awb.slice(0, -1);
+                const cleanAwb = awb;
 
                 let extractedLast4 = cleanAwb.slice(-4);
                 let extractedLast5 = cleanAwb.slice(-5);
@@ -1342,11 +1341,8 @@
                 } else if (awb.startsWith("SPXMY")) {
                     if (/^SPXMY\d{12}$/.test(awb)) isValidFormat = true;
                     else invalidReason = "SPXMY tracking must be exactly 17 chars.";
-                } else if (awb.startsWith("MY")) {
-                    if (/^MY\d{12,15}[A-Z]?$/.test(awb)) isValidFormat = true;
-                    else invalidReason = "Invalid MY tracking format.";
                 } else {
-                    invalidReason = "Must start with 680, SPXMY, or MY.";
+                    invalidReason = "Must start with 680 or SPXMY.";
                 }
 
                 if (!isValidFormat) {
@@ -1506,7 +1502,6 @@
 
                     if (value.startsWith("680") && /^680\d{12}$/.test(value)) isFullBarcode = true;
                     else if (value.startsWith("SPXMY") && /^SPXMY\d{12}$/.test(value)) isFullBarcode = true;
-                    else if (value.startsWith("MY") && /^MY\d{12,15}[A-Z]?$/.test(value)) isFullBarcode = true;
 
                     if (isFullBarcode) {
                         if (!searchQueries.includes(value)) {
