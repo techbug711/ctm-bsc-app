@@ -478,6 +478,7 @@
                     document.getElementById('currentUserDisplay').textContent = name;
                     document.getElementById('section-login').classList.add('hidden');
                     document.getElementById('wms-ui').classList.remove('hidden');
+                    applySmartDefaults();
                     refreshSlotData();
                     startRealTimeSync();
                     if (!isTouchDevice) document.getElementById('awbInput').focus();
@@ -1217,6 +1218,16 @@
 
                 const assignedLocation = getAssignedLocation();
                 targetLocationDisplay.textContent = assignedLocation;
+
+                // Guard: warn if the rack/level isn't in this shop's configured layout
+                const r = rackPrefix.value.toUpperCase();
+                const l = parseInt(levelCounter.value);
+                const zone = getZoneForLocation(r, l);
+                if (currentRackLayout && !zone) {
+                    capacityDisplay.innerHTML = `<span class="text-orange-600 font-black">⚠️ Unknown rack/level — not in this shop's layout.</span>`;
+                    return;
+                }
+
                 capacityDisplay.textContent = "Checking shelf data...";
 
                 // --- 🚀 ZERO-COST FIREBASE OPTIMIZATION ---
