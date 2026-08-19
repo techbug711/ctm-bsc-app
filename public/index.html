@@ -1150,6 +1150,16 @@
                 const r = rackPrefix.value.toUpperCase();
                 const l = parseInt(levelCounter.value);
                 const zone = getZoneForLocation(r, l);
+                const cfg = getLevelConfig(r, l);
+
+                // Constrain the slot input to this rack/level's max slots
+                const maxSlots = (cfg && cfg.maxSlots) ? cfg.maxSlots : null;
+                if (maxSlots) {
+                    slotCounter.max = maxSlots;
+                    if (parseInt(slotCounter.value) > maxSlots) slotCounter.value = maxSlots;
+                } else {
+                    slotCounter.removeAttribute('max');
+                }
 
                 // 1. Zone-wide manual override wins
                 if (zone && zoneCapacityOverride[zone.id]) {
@@ -1158,7 +1168,6 @@
                 }
 
                 // 2. Firebase rackLayout config
-                const cfg = getLevelConfig(r, l);
                 if (cfg && cfg.capacity) {
                     slotCapacity.value = cfg.capacity;
                     return;
@@ -1277,6 +1286,15 @@
                 if (this.value.length === 1) {
                     slotCounter.focus();
                     slotCounter.select();
+                }
+            });
+
+            slotCounter.addEventListener('input', function () {
+                // Strip non-digits and clamp to the rack/level's max slots
+                this.value = this.value.replace(/[^0-9]/g, '');
+                const maxSlots = parseInt(this.max);
+                if (maxSlots && parseInt(this.value) > maxSlots) {
+                    this.value = maxSlots;
                 }
             });
 
