@@ -444,20 +444,6 @@
                 filterInventory(); // Instantly apply the new sort
             }
 
-            // --- MULTI TAB DEBOUNCED REFRESH ---
-            // Prevents the bulk list from re-rendering on every single Firestore
-            // change (which wipes typed input + resets scroll). Instead, it waits
-            // for a quiet period before refreshing once.
-            let bulkRefreshDebounceTimer = null;
-            function scheduleBulkRefresh() {
-                if (bulkRefreshDebounceTimer) clearTimeout(bulkRefreshDebounceTimer);
-                bulkRefreshDebounceTimer = setTimeout(() => {
-                    if (!document.getElementById('section-bulk').classList.contains('hidden')) {
-                        loadBulkTab();
-                    }
-                }, 2000);
-            }
-
             // --- REAL-TIME DATABASE SYNC ---
             function startRealTimeSync() {
                 console.log("📡 Starting real-time sync with shelves...");
@@ -477,7 +463,6 @@
                     });
 
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
-                    scheduleBulkRefresh();
                     if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
                 }, (error) => console.error("Firebase Sync Error: ", error));
             }
