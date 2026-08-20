@@ -1896,8 +1896,14 @@
                     await batch.commit();
                     // Refresh local cache from Firestore so the Multi tab (no listener) re-renders fresh.
                     // One extra read per move, but the move itself is already a batch write.
+                    // Sort by location to match the order used everywhere else in the app.
                     const freshSnap = await shopDB.collection("active_parcels").get();
-                    allInventoryData = freshSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    allInventoryData = freshSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+                        .sort((a, b) => {
+                            const locA = a.location || "UNKNOWN";
+                            const locB = b.location || "UNKNOWN";
+                            return locA.localeCompare(locB, undefined, { numeric: true, sensitivity: 'base' });
+                        });
                     showToast(`✅ Moved ${docIds.length} parcels to ${destinationRack}`, 'success');
                     loadBulkTab();
                 } catch (error) {
