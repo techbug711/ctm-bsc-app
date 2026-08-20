@@ -1894,15 +1894,45 @@
                         batch.update(docRef, { location: destinationRack });
                     });
                     await batch.commit();
-                    alert(`✅ Successfully updated ${docIds.length} parcels to ${destinationRack}!`);
+                    // Refresh local cache from Firestore so the Multi tab (no listener) re-renders fresh.
+                    // One extra read per move, but the move itself is already a batch write.
+                    const freshSnap = await shopDB.collection("active_parcels").get();
+                    allInventoryData = freshSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    showToast(`✅ Moved ${docIds.length} parcels to ${destinationRack}`, 'success');
                     loadBulkTab();
                 } catch (error) {
-                    alert("Error moving parcels: " + error.message);
+                    showToast(`❌ Error moving parcels: ${error.message}`, 'error');
                 }
+            }
+
+            // --- LIGHTWEIGHT TOAST (replaces blocking alert) ---
+            function showToast(message, type = 'info') {
+                const container = document.getElementById('toastContainer');
+                if (!container) return;
+                const colors = {
+                    success: 'bg-green-600 text-white',
+                    error:   'bg-red-600 text-white',
+                    info:    'bg-blue-600 text-white',
+                    warning: 'bg-yellow-500 text-gray-900'
+                };
+                const el = document.createElement('div');
+                el.className = `${colors[type] || colors.info} px-5 py-3 rounded-lg shadow-lg font-bold text-base pointer-events-auto transition-opacity duration-300 opacity-0`;
+                el.textContent = message;
+                container.appendChild(el);
+                // Fade in
+                requestAnimationFrame(() => { el.classList.remove('opacity-0'); el.classList.add('opacity-100'); });
+                // Auto-dismiss after 3s
+                setTimeout(() => {
+                    el.classList.remove('opacity-100');
+                    el.classList.add('opacity-0');
+                    setTimeout(() => el.remove(), 300);
+                }, 3000);
             }
 
         </script>
     </div>
+    <!-- Toast container (fixed top-right, stackable) -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none" aria-live="polite" aria-atomic="true"></div>
     <script>
         // Register Service Worker for PWA Standalone Mode
         if ('serviceWorker' in navigator) {
