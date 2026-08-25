@@ -705,6 +705,11 @@
                     document.getElementById('inventorySearchInput').value = '';
                     loadInventory();
                 }
+                if (tab === 'outbound') {
+                    document.getElementById('searchInput').value = '';
+                    refreshOutboundData();
+                    if (searchQueries.length > 0) executeLocalSearch();
+                }
                 if (tab === 'bulk') loadBulkTab();
                 if (tab === 'history') {
                     document.getElementById('historySearchInput').value = '';
@@ -1921,6 +1926,23 @@
             const resultsArea = document.getElementById('resultsArea');
             const collectAllBtn = document.getElementById('collectAllBtn');
             let searchQueries = []; let currentDisplayedIds = []; let currentDisplayedData = {};
+            let outboundInventoryCache = []; // Fresh active-parcels snapshot for OUT tab
+
+            async function refreshOutboundData() {
+                try {
+                    const snap = await shopDB.collection('active_parcels').get();
+                    outboundInventoryCache = snap.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                } catch (e) {
+                    console.error('Failed to refresh outbound data:', e);
+                }
+            }
+
+            function getOutboundSearchData() {
+                return outboundInventoryCache.length > 0 ? outboundInventoryCache : allInventoryData;
+            }
 
             function clearSearch() {
                 searchQueries = []; currentDisplayedIds = []; currentDisplayedData = {};
@@ -1979,52 +2001,112 @@
 
             searchDbBtn.addEventListener('click', () => { if (searchQueries.length > 0) executeLocalSearch(); });
 
-            function executeLocalSearch() {
+            async function executeLocalSearch() {
                 resultsArea.innerHTML = ''; collectAllBtn.classList.add('hidden');
                 currentDisplayedIds = []; currentDisplayedData = {};
-                let resultsHTML = ''; let directMatches = new Set(); let namesToGroup = new Set();
+                let directMatches = new Set(); let namesToGroup = new Set();
 
-                allInventoryData.forEach(data => {
-                    const awb = data.full_awb.toUpperCase();
+                const localData = getOutboundSearchData();
+                localData.forEach(data => {
+                    const awb = (data.full_awb || '').toUpperCase();
                     const cleanAwb = awb.replace(/[A-Z]$/, '');
-
-                    // Strictly Case-Sensitive grouping for search
                     const nameStr = data.customerName ? data.customerName.trim() : '';
 
                     let matchedQuery = null;
                     const isMatch = searchQueries.some(q => {
-                        const cleanQuery = q.trim();
-                        return awb.endsWith(cleanQuery) || cleanAwb.endsWith(cleanQuery) || awb === cleanQuery || nameStr.includes(cleanQuery);
+                        const cleanQuery = q.trim().toUpperCase();
+                        return awb.endsWith(cleanQuery) || cleanAwb.endsWith(cleanQuery) || awb === cleanQuery || nameStr.toUpperCase().includes(cleanQuery);
                     });
 
                     if (isMatch) {
-                        data._matchedQuery = searchQueries.find(q => awb.includes(q.trim()) || nameStr.includes(q.trim()));
+                        data._matchedQuery = searchQueries.find(q => awb.includes(q.trim()) || nameStr.toUpperCase().includes(q.trim().toUpperCase()));
                         directMatches.add(data);
                         if (data.customerName) namesToGroup.add(data.customerName.trim());
                     }
                 });
 
                 let finalParcelsToDisplay = new Set([...directMatches]);
-                allInventoryData.forEach(data => {
+                localData.forEach(data => {
                     if (data.customerName) {
                         if (namesToGroup.has(data.customerName.trim())) finalParcelsToDisplay.add(data);
                     }
                 });
 
+                // --- FALLBACK: SERVER FETCH IF NO LOCAL RESULTS ---
                 if (finalParcelsToDisplay.size === 0) {
+                    resultsArea.innerHTML = '<p class="text-blue-600 text-xl font-bold text-center animate-pulse">⏳ Checking server for matching parcels...</p>';
+                    try {
+                        const serverMatches = await executeServerSearch();
+                        if (serverMatches.length > 0) {
+                            serverMatches.forEach(data => {
+                                data._matchedQuery = searchQueries.find(q => (data.full_awb || '').toUpperCase().includes(q.trim()) || (data.customerName || '').toUpperCase().includes(q.trim().toUpperCase()));
+                                finalParcelsToDisplay.add(data);
+                                if (data.customerName) namesToGroup.add(data.customerName.trim());
+                            });
+                            localData.forEach(data => {
+                                if (data.customerName && namesToGroup.has(data.customerName.trim())) finalParcelsToDisplay.add(data);
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Server fallback search failed:', e);
+                    }
+                }
+
+                renderOutboundResults([...finalParcelsToDisplay], directMatches, namesToGroup);
+            }
+
+            async function executeServerSearch() {
+                const promises = [];
+                const seen = new Set();
+                const results = [];
+
+                for (const q of searchQueries) {
+                    const cleanQuery = q.trim().toUpperCase();
+                    const len = cleanQuery.length;
+
+                    if (len === 4) promises.push(shopDB.collection('active_parcels').where('last4', '==', cleanQuery).get());
+                    if (len === 5) promises.push(shopDB.collection('active_parcels').where('last5', '==', cleanQuery).get());
+                    if (len === 6) promises.push(shopDB.collection('active_parcels').where('last6', '==', cleanQuery).get());
+
+                    // Full AWB exact match
+                    promises.push(shopDB.collection('active_parcels').where('full_awb', '==', cleanQuery).get());
+                    // Prefix/range match for full barcodes
+                    if (cleanQuery.startsWith('680') || cleanQuery.startsWith('SPXMY')) {
+                        promises.push(shopDB.collection('active_parcels').where('full_awb', '>=', cleanQuery).where('full_awb', '<=', cleanQuery + '\uf8ff').get());
+                    }
+                }
+
+                const snaps = await Promise.all(promises);
+                snaps.forEach(snap => {
+                    snap.forEach(doc => {
+                        const data = { id: doc.id, ...doc.data() };
+                        if (!seen.has(data.id || data.full_awb)) {
+                            seen.add(data.id || data.full_awb);
+                            results.push(data);
+                        }
+                    });
+                });
+
+                return results;
+            }
+
+            function renderOutboundResults(parcels, directMatches, namesToGroup) {
+                currentDisplayedIds = []; currentDisplayedData = {};
+                let resultsHTML = '';
+
+                if (parcels.length === 0) {
                     resultsArea.innerHTML = '<p class="text-red-500 text-xl font-bold text-center">No active parcels found matching those digits.</p>';
                     return;
                 }
 
-                finalParcelsToDisplay.forEach(data => {
+                parcels.forEach(data => {
                     const docId = data.id || data.full_awb;
-                    const awb = data.full_awb.toUpperCase();
+                    const awb = (data.full_awb || '').toUpperCase();
                     const matchedQuery = data._matchedQuery;
 
                     currentDisplayedIds.push(docId);
                     currentDisplayedData[docId] = data;
 
-                    // --- RTS DETECTION (same T+6 rule as inventory) ---
                     let itemTime;
                     if (data.arrive_date && data.arrive_date !== '-') {
                         itemTime = new Date(data.arrive_date + 'T00:00:00+08:00').getTime();
@@ -2064,7 +2146,6 @@
                        </div>`
                         : `<p class="text-sm font-bold text-gray-400 mb-2 italic">No name data yet</p>`;
 
-                    // Dominant RTS banner + red card styling
                     const rtsBanner = isRts
                         ? `<div class="bg-red-600 text-white font-black text-center py-2 px-3 rounded-lg mb-3 text-lg md:text-xl shadow-md animate-pulse flex items-center justify-center gap-2">
                                🚨 RTS — T+${daysOld} DAYS
@@ -2081,7 +2162,7 @@
                             <p class="text-sm text-gray-500 font-bold uppercase tracking-wider mt-1 break-words">
                                 Tracking: <span class="text-gray-900 font-black text-lg select-all break-all">${displayAwb}</span>${platformBadge}
                             </p>
-                            <p class="text-3xl md:text-4xl font-black text-blue-700 mt-2">${data.location}</p>
+                            <p class="text-3xl md:text-4xl font-black text-blue-700 mt-2">${data.location || '-'}</p>
                         </div>
                         <button onclick="markCollected('${docId}')" class="bg-blue-600 text-white px-6 md:px-8 py-4 rounded-lg text-xl md:text-2xl font-bold hover:bg-blue-700 shadow-md transition w-full md:w-auto flex-shrink-0">
                             Collect
