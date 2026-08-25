@@ -175,6 +175,38 @@
 
                 <div id="inboundStatus" class="mb-6 transition-all hidden"></div>
 
+                <div class="flex justify-end gap-2 mb-4">
+                    <button onclick="showRecentScans()" class="text-sm bg-purple-50 text-purple-700 font-bold px-4 py-2 rounded-lg border border-purple-200 hover:bg-purple-100 transition flex items-center gap-1">
+                        📋 Recent Scans
+                    </button>
+                </div>
+
+                <div id="scanLogModal" class="fixed inset-0 bg-gray-900 bg-opacity-80 z-[9998] hidden flex items-center justify-center p-4">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+                        <div class="p-4 border-b flex justify-between items-center bg-purple-50 rounded-t-xl">
+                            <h3 class="text-lg font-black text-purple-900">📋 Scan Log</h3>
+                            <button onclick="closeScanLogModal()" class="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
+                        </div>
+                        <div class="p-4 border-b bg-gray-50 flex flex-wrap gap-2 items-center">
+                            <span class="text-sm font-bold text-gray-600">Show:</span>
+                            <button onclick="renderScanLog('today')" class="text-sm bg-white border border-gray-300 hover:bg-gray-100 font-bold px-3 py-1 rounded">Today</button>
+                            <button onclick="renderScanLog(50)" class="text-sm bg-white border border-gray-300 hover:bg-gray-100 font-bold px-3 py-1 rounded">Last 50</button>
+                            <button onclick="renderScanLog(100)" class="text-sm bg-white border border-gray-300 hover:bg-gray-100 font-bold px-3 py-1 rounded">Last 100</button>
+                            <button onclick="renderScanLog(500)" class="text-sm bg-white border border-gray-300 hover:bg-gray-100 font-bold px-3 py-1 rounded">Last 500</button>
+                            <button onclick="renderScanLog('all')" class="text-sm bg-white border border-gray-300 hover:bg-gray-100 font-bold px-3 py-1 rounded">All (7d)</button>
+                            <button id="clearScanLogBtn" onclick="clearScanLog()" class="hidden text-sm bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 font-bold px-3 py-1 rounded ml-auto">
+                                🗑️ Clear Log
+                            </button>
+                        </div>
+                        <div id="scanLogFilter" class="p-3 border-b bg-white">
+                            <input type="text" id="scanLogFilterInput" placeholder="Filter AWB..." oninput="filterScanLog()" class="w-full p-2 border border-gray-300 rounded font-bold uppercase">
+                        </div>
+                        <div id="scanLogContent" class="overflow-y-auto p-4 space-y-2 flex-1 text-sm">
+                            <p class="text-gray-500 italic text-center">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="reader"
                     class="w-full max-w-md mx-auto hidden mb-4 rounded-lg overflow-hidden border-4 border-blue-300 bg-black">
                 </div>
@@ -620,6 +652,27 @@
                     }
                     const now = audioCtx.currentTime;
                     playNote(880.00, now); playNote(1108.73, now + 0.15); playNote(1318.51, now + 0.30);
+                } catch (e) { }
+            }
+
+            // --- NEW: NETWORK ERROR SOUND (distinct from duplicate) ---
+            function playNetworkErrorBeep() {
+                try {
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    function playLowNote(freq, startTime) {
+                        const osc = audioCtx.createOscillator();
+                        const gainNode = audioCtx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, startTime);
+                        gainNode.gain.setValueAtTime(1.0, startTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.25);
+                        osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+                        osc.start(startTime); osc.stop(startTime + 0.25);
+                    }
+                    const now = audioCtx.currentTime;
+                    playLowNote(200, now);
+                    playLowNote(180, now + 0.20);
+                    playLowNote(150, now + 0.40);
                 } catch (e) { }
             }
 
@@ -1180,6 +1233,299 @@
             }
 
             // --- INBOUND LOGIC ---
+
+            // --- SCAN LOG (IndexedDB) ---
+            const SCAN_LOG_DB_NAME = 'wmsScanLog';
+            const SCAN_LOG_STORE = 'scanAttempts';
+            const SCAN_LOG_VERSION = 1;
+            let scanLogDb = null;
+
+            async function openScanLogDb() {
+                if (scanLogDb) return scanLogDb;
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(SCAN_LOG_DB_NAME, SCAN_LOG_VERSION);
+                    req.onerror = () => reject(req.error);
+                    req.onsuccess = () => { scanLogDb = req.result; resolve(scanLogDb); };
+                    req.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains(SCAN_LOG_STORE)) {
+                            const store = db.createObjectStore(SCAN_LOG_STORE, { keyPath: 'id', autoIncrement: true });
+                            store.createIndex('time', 'time', { unique: false });
+                            store.createIndex('awb', 'awb', { unique: false });
+                            store.createIndex('stage', 'stage', { unique: false });
+                        }
+                    };
+                });
+            }
+
+            async function addScanLogEntry(entry) {
+                try {
+                    const db = await openScanLogDb();
+                    const tx = db.transaction(SCAN_LOG_STORE, 'readwrite');
+                    const store = tx.objectStore(SCAN_LOG_STORE);
+                    await new Promise((resolve, reject) => {
+                        const req = store.add(entry);
+                        req.onsuccess = () => resolve();
+                        req.onerror = () => reject(req.error);
+                    });
+                    await pruneScanLog();
+                } catch (e) {
+                    console.error('Failed to write scan log:', e);
+                }
+            }
+
+            async function pruneScanLog() {
+                try {
+                    const db = await openScanLogDb();
+                    const tx = db.transaction(SCAN_LOG_STORE, 'readwrite');
+                    const store = tx.objectStore(SCAN_LOG_STORE);
+                    const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+                    const index = store.index('time');
+                    const req = index.openCursor(IDBKeyRange.upperBound(cutoff));
+                    await new Promise((resolve, reject) => {
+                        req.onsuccess = (e) => {
+                            const cursor = e.target.result;
+                            if (cursor) {
+                                store.delete(cursor.primaryKey);
+                                cursor.continue();
+                            } else {
+                                resolve();
+                            }
+                        };
+                        req.onerror = () => reject(req.error);
+                    });
+                } catch (e) {
+                    console.error('Failed to prune scan log:', e);
+                }
+            }
+
+            async function getScanLogEntries(mode = 50) {
+                await pruneScanLog();
+                const db = await openScanLogDb();
+                const tx = db.transaction(SCAN_LOG_STORE, 'readonly');
+                const store = tx.objectStore(SCAN_LOG_STORE);
+                const index = store.index('time');
+                const all = await new Promise((resolve, reject) => {
+                    const req = index.openCursor(null, 'prev');
+                    const items = [];
+                    req.onsuccess = (e) => {
+                        const cursor = e.target.result;
+                        if (cursor) {
+                            items.push(cursor.value);
+                            cursor.continue();
+                        } else {
+                            resolve(items);
+                        }
+                    };
+                    req.onerror = () => reject(req.error);
+                });
+
+                if (mode === 'today') {
+                    const startOfToday = new Date();
+                    startOfToday.setHours(0, 0, 0, 0);
+                    return all.filter(e => e.time >= startOfToday.getTime());
+                }
+                if (mode === 'all') return all;
+                if (typeof mode === 'number') return all.slice(0, mode);
+                return all.slice(0, 50);
+            }
+
+            async function clearScanLog() {
+                if (currentUser !== 'Admin') {
+                    showToast('Only Admin can clear the scan log.', 'error');
+                    return;
+                }
+                if (!confirm('Clear all scan log entries? This cannot be undone.')) return;
+                try {
+                    const db = await openScanLogDb();
+                    const tx = db.transaction(SCAN_LOG_STORE, 'readwrite');
+                    const store = tx.objectStore(SCAN_LOG_STORE);
+                    await new Promise((resolve, reject) => {
+                        const req = store.clear();
+                        req.onsuccess = () => resolve();
+                        req.onerror = () => reject(req.error);
+                    });
+                    showToast('Scan log cleared.', 'info');
+                    renderScanLog('today');
+                } catch (e) {
+                    showToast('Failed to clear scan log: ' + e.message, 'error');
+                }
+            }
+
+            let currentScanLogEntries = [];
+            function showRecentScans() {
+                document.getElementById('scanLogModal').classList.remove('hidden');
+                const clearBtn = document.getElementById('clearScanLogBtn');
+                if (currentUser === 'Admin') clearBtn.classList.remove('hidden');
+                else clearBtn.classList.add('hidden');
+                renderScanLog('today');
+            }
+            function closeScanLogModal() {
+                document.getElementById('scanLogModal').classList.add('hidden');
+            }
+            function filterScanLog() {
+                const q = document.getElementById('scanLogFilterInput').value.toUpperCase();
+                const filtered = currentScanLogEntries.filter(e =>
+                    (e.awb || '').toUpperCase().includes(q)
+                );
+                renderScanLogList(filtered);
+            }
+            async function renderScanLog(mode) {
+                const entries = await getScanLogEntries(mode);
+                currentScanLogEntries = entries;
+                document.getElementById('scanLogFilterInput').value = '';
+                renderScanLogList(entries);
+            }
+            function renderScanLogList(entries) {
+                const container = document.getElementById('scanLogContent');
+                if (!entries.length) {
+                    container.innerHTML = '<p class="text-gray-500 italic text-center py-8">No scan attempts found.</p>';
+                    return;
+                }
+                let html = '';
+                entries.forEach(e => {
+                    const t = new Date(e.time).toLocaleString('en-MY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    const colors = {
+                        success: 'bg-green-50 border-green-300 text-green-800',
+                        duplicate: 'bg-yellow-50 border-yellow-300 text-yellow-800',
+                        failed: 'bg-red-50 border-red-300 text-red-800',
+                        attempt: 'bg-blue-50 border-blue-300 text-blue-800',
+                        retry: 'bg-purple-50 border-purple-300 text-purple-800'
+                    };
+                    const stageLabel = e.stage.toUpperCase();
+                    const errorText = e.error ? `<p class="text-xs mt-1 font-bold text-red-600">⚠️ ${e.error}</p>` : '';
+                    const durationText = e.firebaseWriteMs ? `<span class="text-xs text-gray-500">(${e.firebaseWriteMs}ms)</span>` : '';
+                    html += `
+                    <div class="border-2 p-3 rounded-lg ${colors[e.stage] || colors.attempt}">
+                        <div class="flex justify-between items-start flex-wrap gap-2">
+                            <div>
+                                <p class="font-black text-base">${e.awb}</p>
+                                <p class="text-xs font-bold">${t} &bull; ${e.staff || 'Unknown'} &bull; ${e.source || 'scanner'}</p>
+                            </div>
+                            <span class="text-xs font-black px-2 py-1 rounded bg-white bg-opacity-60 border">${stageLabel}</span>
+                        </div>
+                        <p class="text-xs mt-1 font-bold">Loc: ${e.location || '-'} ${durationText}</p>
+                        ${errorText}
+                    </div>`;
+                });
+                container.innerHTML = html;
+            }
+
+            // --- AUTO-RETRY FAILED WRITES (every 10 seconds) ---
+            async function getFailedScanLogEntries() {
+                await pruneScanLog();
+                const db = await openScanLogDb();
+                const tx = db.transaction(SCAN_LOG_STORE, 'readonly');
+                const store = tx.objectStore(SCAN_LOG_STORE);
+                const index = store.index('stage');
+                return new Promise((resolve, reject) => {
+                    const req = index.openCursor('failed');
+                    const items = [];
+                    req.onsuccess = (e) => {
+                        const cursor = e.target.result;
+                        if (cursor) {
+                            items.push(cursor.value);
+                            cursor.continue();
+                        } else {
+                            resolve(items);
+                        }
+                    };
+                    req.onerror = () => reject(req.error);
+                });
+            }
+
+            async function updateScanLogEntry(id, updates) {
+                try {
+                    const db = await openScanLogDb();
+                    const tx = db.transaction(SCAN_LOG_STORE, 'readwrite');
+                    const store = tx.objectStore(SCAN_LOG_STORE);
+                    const entry = await new Promise((resolve, reject) => {
+                        const req = store.get(id);
+                        req.onsuccess = () => resolve(req.result);
+                        req.onerror = () => reject(req.error);
+                    });
+                    if (!entry) return;
+                    Object.assign(entry, updates);
+                    await new Promise((resolve, reject) => {
+                        const req = store.put(entry);
+                        req.onsuccess = () => resolve();
+                        req.onerror = () => reject(req.error);
+                    });
+                } catch (e) {
+                    console.error('Failed to update scan log entry:', e);
+                }
+            }
+
+            async function retryFailedWrites() {
+                const failed = await getFailedScanLogEntries();
+                if (!failed.length) return;
+                console.log(`🔁 Auto-retrying ${failed.length} failed scan(s)...`);
+                for (const entry of failed) {
+                    try {
+                        const docRef = shopDB.collection('active_parcels').doc(entry.awb);
+                        const exists = await docRef.get();
+                        if (exists.exists) {
+                            await updateScanLogEntry(entry.id, { stage: 'duplicate', error: 'Already in active_parcels during retry' });
+                            continue;
+                        }
+                        await docRef.set({
+                            full_awb: entry.awb,
+                            last4: entry.awb.slice(-4),
+                            last5: entry.awb.slice(-5),
+                            last6: entry.awb.slice(-6),
+                            location: entry.location,
+                            inboundAt: Date.now(),
+                            timestamp: Date.now(),
+                            scannedBy: entry.staff
+                        });
+                        await updateScanLogEntry(entry.id, { stage: 'success', error: null, time: Date.now(), retryNote: 'Auto-retry succeeded' });
+                        showToast(`✅ Auto-retry saved ${entry.awb}`, 'success');
+                    } catch (e) {
+                        await updateScanLogEntry(entry.id, { error: e.code || e.message, retryNote: `Retry failed at ${new Date().toLocaleTimeString()}` });
+                    }
+                }
+            }
+
+            setInterval(retryFailedWrites, 10000);
+
+            function isRetryableFirebaseError(error) {
+                if (!error) return false;
+                const code = error.code || '';
+                return code.includes('unavailable') ||
+                       code.includes('network-request-failed') ||
+                       code.includes('timeout') ||
+                       code.includes('cancelled') ||
+                       code.includes('deadline-exceeded');
+            }
+
+            async function retryableGet(docRef, maxAttempts = 3) {
+                let lastError;
+                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                    try {
+                        return await docRef.get();
+                    } catch (e) {
+                        lastError = e;
+                        if (!isRetryableFirebaseError(e) || attempt === maxAttempts) throw e;
+                        await new Promise(r => setTimeout(r, 300 * attempt));
+                    }
+                }
+                throw lastError;
+            }
+
+            async function retryableSet(docRef, payload, maxAttempts = 3) {
+                let lastError;
+                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                    try {
+                        return await docRef.set(payload);
+                    } catch (e) {
+                        lastError = e;
+                        if (!isRetryableFirebaseError(e) || attempt === maxAttempts) throw e;
+                        await new Promise(r => setTimeout(r, 300 * attempt));
+                    }
+                }
+                throw lastError;
+            }
+
             const rackPrefix = document.getElementById('rackPrefix');
             const levelCounter = document.getElementById('levelCounter');
             const slotCounter = document.getElementById('slotCounter');
@@ -1401,6 +1747,19 @@
                 const awb = awbInput.value.trim().toUpperCase();
                 const statusDiv = document.getElementById('inboundStatus');
 
+                awbInput.disabled = true;
+                const startTime = performance.now();
+
+                let logEntry = {
+                    time: Date.now(),
+                    awb: awb,
+                    location: getAssignedLocation(),
+                    staff: currentUser || 'Admin',
+                    stage: 'attempt',
+                    error: null,
+                    source: isCameraActive ? 'camera' : 'scanner'
+                };
+
                 let isValidFormat = false;
                 let invalidReason = "";
                 const cleanAwb = awb;
@@ -1423,54 +1782,82 @@
                     playInvalidBuzzer();
                     statusDiv.innerHTML = `⚠️ Invalid Barcode!<br><span class="text-xl">"${awb}"<br>${invalidReason}</span>`;
                     statusDiv.className = "mb-6 p-4 bg-orange-100 border-4 border-orange-500 text-2xl font-black text-center text-orange-800 rounded-lg block shadow-lg";
-                    awbInput.value = ''; manageFocusState(awbInput);
+                    logEntry.stage = 'failed';
+                    logEntry.error = `Invalid format: ${invalidReason}`;
+                    logEntry.firebaseWriteMs = Math.round(performance.now() - startTime);
+                    await addScanLogEntry(logEntry);
+                    awbInput.value = '';
+                    awbInput.disabled = false;
+                    manageFocusState(awbInput);
                     return;
                 }
 
                 const assignedLocation = getAssignedLocation();
+                logEntry.location = assignedLocation;
 
                 try {
                     const docRef = shopDB.collection("active_parcels").doc(awb);
-                    const docSnap = await docRef.get();
+                    const docSnap = await retryableGet(docRef);
 
                     if (docSnap.exists) {
                         playDuplicateBuzzer();
                         const existingLocation = docSnap.data().location;
                         statusDiv.innerHTML = `🚨 DUPLICATE SCAN! 🚨<br><span class="text-2xl">Already saved to ${existingLocation}</span><br><span class="text-lg mt-2 inline-block">AWB: ${awb}</span>`;
                         statusDiv.className = "mb-6 p-4 bg-red-100 border-4 border-red-600 text-3xl font-black text-center text-red-700 rounded-lg block shadow-lg";
-                        awbInput.value = ''; manageFocusState(awbInput);
+                        logEntry.stage = 'duplicate';
+                        logEntry.error = `Already saved to ${existingLocation}`;
+                        logEntry.firebaseWriteMs = Math.round(performance.now() - startTime);
+                        await addScanLogEntry(logEntry);
+                        awbInput.value = '';
+                        awbInput.disabled = false;
+                        manageFocusState(awbInput);
                         return;
                     }
 
-                    await docRef.set({
+                    const payload = {
                         full_awb: awb,
                         last4: extractedLast4,
                         last5: extractedLast5,
                         last6: extractedLast6,
                         location: assignedLocation,
-                        inboundAt: Date.now(), // THE FIX: Immutable physical arrival time
-                        timestamp: Date.now(), // The volatile RTS timer
-                        scannedBy: currentUser
-                    });
+                        inboundAt: Date.now(),
+                        timestamp: Date.now(),
+                        scannedBy: currentUser || 'Admin'
+                    };
+
+                    await retryableSet(docRef, payload);
 
                     statusDiv.innerHTML = `✅ Saved to <span class="text-4xl">${assignedLocation}</span><br><span class="text-xl text-green-800 block mt-2 tracking-wider">AWB: ${awb}</span>`;
                     statusDiv.className = "mb-6 p-4 bg-green-100 border-4 border-green-500 text-3xl font-black text-center text-green-700 rounded-lg block shadow-lg";
                     awbInput.value = '';
+                    awbInput.disabled = false;
+
+                    logEntry.stage = 'success';
+                    logEntry.firebaseWriteMs = Math.round(performance.now() - startTime);
+                    await addScanLogEntry(logEntry);
 
                     currentItemsInSlot++;
 
                     if (currentItemsInSlot >= parseInt(slotCapacity.value)) {
                         playSlotFullChime();
-                        advanceToNextSlot(); // Triggers the unified geometry engine
+                        advanceToNextSlot();
                     } else {
                         playSuccessBeep();
                         capacityDisplay.textContent = `Item ${currentItemsInSlot} of ${slotCapacity.value} currently in slot`;
                     }
                     manageFocusState(awbInput);
                 } catch (error) {
-                    playDuplicateBuzzer();
-                    statusDiv.textContent = `❌ Error saving: ${error.message}`;
+                    playNetworkErrorBeep();
+                    const errMsg = error.code ? `${error.code}: ${error.message}` : error.message;
+                    statusDiv.innerHTML = `❌ FAILED TO SAVE<br><span class="text-lg">${errMsg}</span><br><span class="text-base mt-2">Will auto-retry in background.</span>`;
                     statusDiv.className = "mb-6 p-4 bg-red-100 border-4 border-red-600 text-2xl font-black text-center text-red-700 rounded-lg block shadow-lg";
+                    logEntry.stage = 'failed';
+                    logEntry.error = errMsg;
+                    logEntry.firebaseWriteMs = Math.round(performance.now() - startTime);
+                    await addScanLogEntry(logEntry);
+                    showToast(`⚠️ ${awb} not saved. Auto-retry running.`, 'error');
+                    awbInput.value = '';
+                    awbInput.disabled = false;
                     manageFocusState(awbInput);
                 }
             });
