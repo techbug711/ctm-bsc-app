@@ -349,7 +349,11 @@
             </div>
 
             <div id="section-slots" class="p-4 md:p-8 hidden">
-                <h2 class="text-2xl font-bold mb-6 text-gray-800">🗄️ Live Slot Occupancy</h2>
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800">🗄️ Slot Occupancy</h2>
+                    <button id="syncSlotsBtn" onclick="refreshSlotMap()"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-sm">🔄 Sync</button>
+                </div>
                 <div id="slotMapContainer" class="space-y-4">
                     <p class="text-gray-500 italic text-center">Loading slot map...</p>
                 </div>
@@ -560,7 +564,6 @@
                     rebuildAwbSet(parcels);
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
                     if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
-                    if (!document.getElementById('section-slots').classList.contains('hidden')) renderSlotMap();
                 }).catch((error) => console.error("Initial fetch error:", error));
             }
 
@@ -582,7 +585,6 @@
                     rebuildAwbSet(parcels);
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
                     if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
-                    if (!document.getElementById('section-slots').classList.contains('hidden')) renderSlotMap();
                 }, (error) => console.error("Firebase Sync Error: ", error));
             }
 
@@ -594,15 +596,17 @@
                 }
             }
 
-            // --- LIVE SLOT OCCUPANCY MAP ---
-            function renderSlotMap() {
+            // --- LIVE SLOT OCCUPANCY MAP (ON-DEMAND, LOW COST) ---
+            // Renders from a passed-in parcel array. Does NOT attach a real-time listener;
+            // it is refreshed by a one-time fetch when the SLOTS tab opens or the Sync button is tapped.
+            function renderSlotMap(parcels) {
                 const container = document.getElementById('slotMapContainer');
                 if (!container) return;
-                const parcels = allInventoryData || [];
+                const data = parcels || allInventoryData || [];
                 const layout = currentRackLayout;
 
                 const counts = {};
-                parcels.forEach(p => {
+                data.forEach(p => {
                     const loc = (p.location || '').toString().toUpperCase().trim();
                     if (loc) counts[loc] = (counts[loc] || 0) + 1;
                 });
@@ -665,6 +669,30 @@
                 });
 
                 container.innerHTML = html;
+            }
+
+            // --- ON-DEMAND SLOT MAP REFRESH (one-time read, no listener) ---
+            async function refreshSlotMap() {
+                const btn = document.getElementById('syncSlotsBtn');
+                const container = document.getElementById('slotMapContainer');
+                if (btn) { btn.innerHTML = '⏳ Syncing...'; btn.disabled = true; }
+                try {
+                    const snapshot = await shopDB.collection('active_parcels').get();
+                    const parcels = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        data.id = doc.id;
+                        parcels.push(data);
+                    });
+                    renderSlotMap(parcels);
+                    if (btn) { btn.innerHTML = '✅ Synced'; }
+                } catch (e) {
+                    console.error('Slot map refresh failed:', e);
+                    if (container) container.innerHTML = '<p class="text-red-500 font-bold text-center">Failed to load slot map. Check connection.</p>';
+                    if (btn) { btn.innerHTML = '❌ Failed'; }
+                } finally {
+                    if (btn) setTimeout(() => { btn.innerHTML = '🔄 Sync'; btn.disabled = false; }, 1500);
+                }
             }
 
             // --- MANUAL SYNC FOR INBOUND TAB ---
@@ -826,10 +854,15 @@
                 // --- TAB-AWARE LISTENER: keep it warm on IN/OUT/STOCK for instant scans ---
                 // Cost is no longer a concern; a warm listener keeps the gRPC channel open and
                 // the local AWB Set fresh, eliminating cold-reconnect latency on every scan.
-                if (tab === 'inventory' || tab === 'outbound' || tab === 'inbound' || tab === 'slots') {
+                // SLOTS is intentionally EXCLUDED — it uses a one-time fetch instead (low cost).
+                if (tab === 'inventory' || tab === 'outbound' || tab === 'inbound') {
                     attachActiveParcelListener();
                 } else {
                     detachActiveParcelListener();
+                }
+
+                if (tab === 'slots') {
+                    refreshSlotMap();
                 }
 
                 if (tab === 'inventory') {
