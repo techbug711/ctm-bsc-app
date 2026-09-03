@@ -1951,11 +1951,11 @@
                         document.getElementById('awbInput').value = decodedText;
                         inboundForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
-                        startCameraBtn.innerHTML = '⏳ Saving... Next scan in 0.5s';
+                        startCameraBtn.innerHTML = '⏳ Saving... Next scan in 1.5s';
                         setTimeout(() => {
                             isCameraCooldown = false;
                             if (isCameraActive) startCameraBtn.innerHTML = '🛑 Stop Scanner';
-                        }, 500);
+                        }, 1500);
                     },
                     (errorMessage) => { }
                 ).catch((err) => {
