@@ -201,6 +201,16 @@
                 </div>
             </div>
 
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="bg-blue-50 p-4 border-b border-blue-100 flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-blue-800 uppercase tracking-wide">🗄️ Live Slot Occupancy</h3>
+                    <span class="text-xs font-bold text-gray-500">Updates in real time</span>
+                </div>
+                <div id="slotMapContainer" class="p-4 space-y-4">
+                    <p class="text-gray-400 font-bold italic text-center py-8">Loading slot map...</p>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -233,6 +243,7 @@
         const shopDB = db.collection("shops").doc(currentShopId);
         let syncStarted = false;
         let currentShopTier = 'basic';
+        let currentRackLayout = null;
 
         firebase.auth().onAuthStateChanged((user) => {
             if (user) {
@@ -268,6 +279,7 @@
                     }
 
                     currentShopTier = shopData.tier ? shopData.tier.toLowerCase() : 'basic';
+                    currentRackLayout = shopData.rackLayout || null;
 
                     if (currentShopTier === 'basic') {
                         document.getElementById('tier-lockout-screen').classList.remove('hidden');
@@ -383,6 +395,7 @@
                 let spxCount = 0; let yoyiCount = 0;
                 let deadStockList = [];
                 let staffInboundMap = {};
+                let activeParcels = [];
 
                 let actSpx = { today: 0, week: 0, month: 0 };
                 let actYoyi = { today: 0, week: 0, month: 0 };
@@ -390,6 +403,7 @@
                 snapshot.forEach(doc => {
                     const data = doc.data();
                     totalActive++;
+                    activeParcels.push(data);
 
                     // --- PHYSICAL SCAN TRACKING ---
                     // inboundAt = immutable physical scan time (set once by WMS scanner)
@@ -453,7 +467,9 @@
                 window.latestStaffActiveInbound = staffInboundMap;
                 window.actSpx = actSpx;
                 window.actYoyi = actYoyi;
+                window.latestActiveParcels = activeParcels;
 
+                renderSlotMap();
                 calculateMatrixTotals();
                 renderStaffChart();
             });
@@ -647,6 +663,81 @@
  `;
             });
             tbody.innerHTML = html;
+        }
+
+        // --- LIVE SLOT OCCUPANCY MAP ---
+        function renderSlotMap() {
+            const container = document.getElementById('slotMapContainer');
+            if (!container) return;
+            const parcels = window.latestActiveParcels || [];
+            const layout = currentRackLayout;
+
+            // Count parcels per location
+            const counts = {};
+            parcels.forEach(p => {
+                const loc = (p.location || '').toString().toUpperCase().trim();
+                if (loc) counts[loc] = (counts[loc] || 0) + 1;
+            });
+
+            // Build the ordered rack/level/slot structure from rackLayout
+            const racks = layout && layout.racks ? layout.racks : {};
+            const rackKeys = Object.keys(racks).sort();
+
+            if (rackKeys.length === 0) {
+                container.innerHTML = '<p class="text-gray-400 font-bold italic text-center py-8">No rack layout configured.</p>';
+                return;
+            }
+
+            let html = '';
+            rackKeys.forEach(rack => {
+                const rackCfg = racks[rack];
+                const levels = rackCfg && rackCfg.levels ? rackCfg.levels : {};
+                const levelKeys = Object.keys(levels).sort((a, b) => parseInt(a) - parseInt(b));
+
+                levelKeys.forEach(level => {
+                    const levelCfg = levels[level];
+                    const maxSlots = levelCfg.maxSlots || 1;
+                    const capacity = levelCfg.capacity || 15;
+
+                    let cells = '';
+                    for (let s = 1; s <= maxSlots; s++) {
+                        const loc = `${rack}-${level}-${s}`;
+                        const count = counts[loc] || 0;
+                        const ratio = count / capacity;
+                        let bg, border, text;
+                        if (count >= capacity) {
+                            bg = 'bg-red-500'; border = 'border-red-700'; text = 'text-white';
+                        } else if (ratio >= 0.7) {
+                            bg = 'bg-amber-400'; border = 'border-amber-600'; text = 'text-amber-950';
+                        } else if (count > 0) {
+                            bg = 'bg-green-200'; border = 'border-green-400'; text = 'text-green-900';
+                        } else {
+                            bg = 'bg-gray-100'; border = 'border-gray-300'; text = 'text-gray-500';
+                        }
+                        const fullBadge = count >= capacity ? '<span class="block text-[8px] font-black uppercase mt-0.5">FULL</span>' : '';
+                        cells += `
+                        <div class="${bg} ${border} border-2 rounded-lg p-2 text-center shadow-sm">
+                            <div class="text-[10px] font-bold ${text} opacity-70">${s}</div>
+                            <div class="text-lg font-black ${text} leading-tight">${count}</div>
+                            <div class="text-[9px] font-bold ${text} opacity-70">/${capacity}</div>
+                            ${fullBadge}
+                        </div>`;
+                    }
+
+                    html += `
+                    <div class="border border-gray-200 rounded-lg overflow-hidden">
+                        <div class="bg-gray-50 px-3 py-2 flex justify-between items-center border-b border-gray-200">
+                            <span class="font-black text-gray-700">${rack}-${level}</span>
+                            <span class="text-xs font-bold text-gray-400">${maxSlots} slots &bull; cap ${capacity}</span>
+                        </div>
+                        <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 p-3">
+                            ${cells}
+                        </div>
+                    </div>`;
+                });
+            });
+
+            container.innerHTML = html;
         }
 
     </script>

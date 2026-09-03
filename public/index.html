@@ -133,6 +133,9 @@
                 <button id="tab-history"
                     class="flex-1 py-3 text-center text-gray-500 text-sm md:text-lg hover:bg-gray-50 transition"
                     onclick="switchTab('history')">📜 HIST</button>
+                <button id="tab-slots"
+                    class="flex-1 py-3 text-center text-gray-500 text-sm md:text-lg hover:bg-gray-50 transition"
+                    onclick="switchTab('slots')">🗄️ SLOTS</button>
             </div>
 
             <div id="section-inbound" class="p-4 md:p-8">
@@ -345,6 +348,13 @@
                 </div>
             </div>
 
+            <div id="section-slots" class="p-4 md:p-8 hidden">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800">🗄️ Live Slot Occupancy</h2>
+                <div id="slotMapContainer" class="space-y-4">
+                    <p class="text-gray-500 italic text-center">Loading slot map...</p>
+                </div>
+            </div>
+
             <div id="moveParcelModal" class="fixed inset-0 bg-gray-900 bg-opacity-80 z-[9999] hidden flex items-center justify-center p-4">
                 <div class="bg-white rounded-xl shadow-2xl max-w-md w-full">
                     <div class="p-4 border-b flex justify-between items-center bg-blue-50 rounded-t-xl">
@@ -550,6 +560,7 @@
                     rebuildAwbSet(parcels);
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
                     if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
+                    if (!document.getElementById('section-slots').classList.contains('hidden')) renderSlotMap();
                 }).catch((error) => console.error("Initial fetch error:", error));
             }
 
@@ -571,6 +582,7 @@
                     rebuildAwbSet(parcels);
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
                     if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
+                    if (!document.getElementById('section-slots').classList.contains('hidden')) renderSlotMap();
                 }, (error) => console.error("Firebase Sync Error: ", error));
             }
 
@@ -580,6 +592,79 @@
                     activeParcelListener();
                     activeParcelListener = null;
                 }
+            }
+
+            // --- LIVE SLOT OCCUPANCY MAP ---
+            function renderSlotMap() {
+                const container = document.getElementById('slotMapContainer');
+                if (!container) return;
+                const parcels = allInventoryData || [];
+                const layout = currentRackLayout;
+
+                const counts = {};
+                parcels.forEach(p => {
+                    const loc = (p.location || '').toString().toUpperCase().trim();
+                    if (loc) counts[loc] = (counts[loc] || 0) + 1;
+                });
+
+                const racks = layout && layout.racks ? layout.racks : {};
+                const rackKeys = Object.keys(racks).sort();
+
+                if (rackKeys.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500 italic text-center">No rack layout configured.</p>';
+                    return;
+                }
+
+                let html = '';
+                rackKeys.forEach(rack => {
+                    const rackCfg = racks[rack];
+                    const levels = rackCfg && rackCfg.levels ? rackCfg.levels : {};
+                    const levelKeys = Object.keys(levels).sort((a, b) => parseInt(a) - parseInt(b));
+
+                    levelKeys.forEach(level => {
+                        const levelCfg = levels[level];
+                        const maxSlots = levelCfg.maxSlots || 1;
+                        const capacity = levelCfg.capacity || 15;
+
+                        let cells = '';
+                        for (let s = 1; s <= maxSlots; s++) {
+                            const loc = `${rack}-${level}-${s}`;
+                            const count = counts[loc] || 0;
+                            const ratio = count / capacity;
+                            let bg, border, text;
+                            if (count >= capacity) {
+                                bg = 'bg-red-500'; border = 'border-red-700'; text = 'text-white';
+                            } else if (ratio >= 0.7) {
+                                bg = 'bg-amber-400'; border = 'border-amber-600'; text = 'text-amber-950';
+                            } else if (count > 0) {
+                                bg = 'bg-green-200'; border = 'border-green-400'; text = 'text-green-900';
+                            } else {
+                                bg = 'bg-gray-100'; border = 'border-gray-300'; text = 'text-gray-500';
+                            }
+                            const fullBadge = count >= capacity ? '<span class="block text-[8px] font-black uppercase mt-0.5">FULL</span>' : '';
+                            cells += `
+                            <div class="${bg} ${border} border-2 rounded-lg p-2 text-center shadow-sm">
+                                <div class="text-[10px] font-bold ${text} opacity-70">${s}</div>
+                                <div class="text-lg font-black ${text} leading-tight">${count}</div>
+                                <div class="text-[9px] font-bold ${text} opacity-70">/${capacity}</div>
+                                ${fullBadge}
+                            </div>`;
+                        }
+
+                        html += `
+                        <div class="border border-gray-200 rounded-lg overflow-hidden">
+                            <div class="bg-gray-50 px-3 py-2 flex justify-between items-center border-b border-gray-200">
+                                <span class="font-black text-gray-700">${rack}-${level}</span>
+                                <span class="text-xs font-bold text-gray-400">${maxSlots} slots &bull; cap ${capacity}</span>
+                            </div>
+                            <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 p-3">
+                                ${cells}
+                            </div>
+                        </div>`;
+                    });
+                });
+
+                container.innerHTML = html;
             }
 
             // --- MANUAL SYNC FOR INBOUND TAB ---
@@ -722,7 +807,7 @@
 
             // --- TABS ---
             function switchTab(tab) {
-                const tabs = ['inbound', 'outbound', 'inventory', 'bulk', 'history'];
+                const tabs = ['inbound', 'outbound', 'inventory', 'bulk', 'history', 'slots'];
                 tabs.forEach(t => {
                     document.getElementById(`section-${t}`).classList.toggle('hidden', tab !== t);
                     const btn = document.getElementById(`tab-${t}`);
@@ -741,7 +826,7 @@
                 // --- TAB-AWARE LISTENER: keep it warm on IN/OUT/STOCK for instant scans ---
                 // Cost is no longer a concern; a warm listener keeps the gRPC channel open and
                 // the local AWB Set fresh, eliminating cold-reconnect latency on every scan.
-                if (tab === 'inventory' || tab === 'outbound' || tab === 'inbound') {
+                if (tab === 'inventory' || tab === 'outbound' || tab === 'inbound' || tab === 'slots') {
                     attachActiveParcelListener();
                 } else {
                     detachActiveParcelListener();
@@ -1089,7 +1174,7 @@
                 const level = document.getElementById('moveLevel').value;
                 const rackCfg = currentRackLayout && currentRackLayout.racks && currentRackLayout.racks[rack];
                 const levelCfg = rackCfg && rackCfg.levels && rackCfg.levels[level];
-                return (levelCfg && levelCfg.capacity) ? levelCfg.capacity : 10;
+                return (levelCfg && levelCfg.capacity) ? levelCfg.capacity : 15;
             }
 
             function updateMoveOccupancy() {
@@ -1732,7 +1817,7 @@
                 }
 
                 // 3. Fallback default
-                slotCapacity.value = 10;
+                slotCapacity.value = 15;
             }
 
             // --- ZONE-AWARE PROGRESSION ENGINE ---
