@@ -207,43 +207,6 @@
                     </div>
                 </div>
 
-                <div id="moveParcelModal" class="fixed inset-0 bg-gray-900 bg-opacity-80 z-[9999] hidden flex items-center justify-center p-4">
-                    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full">
-                        <div class="p-4 border-b flex justify-between items-center bg-blue-50 rounded-t-xl">
-                            <h3 class="text-lg font-black text-blue-900">🔄 Move Parcel</h3>
-                            <button onclick="closeMoveParcelModal()" class="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
-                        </div>
-                        <div class="p-4 space-y-4">
-                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                                <p class="text-xs text-gray-500 font-bold uppercase">Tracking Number</p>
-                                <p id="moveAWB" class="text-lg font-black text-gray-800 break-all">—</p>
-                                <p class="text-xs text-gray-500 font-bold uppercase mt-2">Current Location</p>
-                                <p id="moveCurrentLocation" class="text-lg font-black text-purple-700">—</p>
-                            </div>
-                            <div class="grid grid-cols-3 gap-3">
-                                <div>
-                                    <label class="block text-xs font-bold text-gray-600 mb-1">Rack</label>
-                                    <select id="moveRack" onchange="populateMoveLevel()" class="w-full p-3 border border-gray-300 rounded-lg font-black text-lg text-center"></select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-gray-600 mb-1">Level</label>
-                                    <select id="moveLevel" onchange="populateMoveSlot()" class="w-full p-3 border border-gray-300 rounded-lg font-black text-lg text-center"></select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-gray-600 mb-1">Slot</label>
-                                    <select id="moveSlot" onchange="updateMoveOccupancy()" class="w-full p-3 border border-gray-300 rounded-lg font-black text-lg text-center"></select>
-                                </div>
-                            </div>
-                            <div id="moveOccupancy" class="text-center text-sm font-bold text-gray-600"></div>
-                            <div id="moveWarning" class="hidden text-center text-sm font-black text-orange-600 bg-orange-50 border border-orange-300 rounded-lg p-2"></div>
-                            <div class="flex gap-3">
-                                <button onclick="closeMoveParcelModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-lg transition">Cancel</button>
-                                <button onclick="confirmMoveParcel()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">✅ Move</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <div id="reader"
                     class="w-full max-w-md mx-auto hidden mb-4 rounded-lg overflow-hidden border-4 border-blue-300 bg-black">
                 </div>
@@ -379,6 +342,43 @@
 
                 <div id="historyList" class="space-y-4">
                     <p class="text-gray-500 italic text-center">Click Refresh to load history.</p>
+                </div>
+            </div>
+
+            <div id="moveParcelModal" class="fixed inset-0 bg-gray-900 bg-opacity-80 z-[9999] hidden flex items-center justify-center p-4">
+                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full">
+                    <div class="p-4 border-b flex justify-between items-center bg-blue-50 rounded-t-xl">
+                        <h3 class="text-lg font-black text-blue-900">🔄 Move Parcel</h3>
+                        <button onclick="closeMoveParcelModal()" class="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
+                    </div>
+                    <div class="p-4 space-y-4">
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                            <p class="text-xs text-gray-500 font-bold uppercase">Tracking Number</p>
+                            <p id="moveAWB" class="text-lg font-black text-gray-800 break-all">—</p>
+                            <p class="text-xs text-gray-500 font-bold uppercase mt-2">Current Location</p>
+                            <p id="moveCurrentLocation" class="text-lg font-black text-purple-700">—</p>
+                        </div>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Rack</label>
+                                <select id="moveRack" onchange="populateMoveLevel()" class="w-full p-3 border border-gray-300 rounded-lg font-black text-lg text-center"></select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Level</label>
+                                <select id="moveLevel" onchange="populateMoveSlot()" class="w-full p-3 border border-gray-300 rounded-lg font-black text-lg text-center"></select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Slot</label>
+                                <select id="moveSlot" onchange="updateMoveOccupancy()" class="w-full p-3 border border-gray-300 rounded-lg font-black text-lg text-center"></select>
+                            </div>
+                        </div>
+                        <div id="moveOccupancy" class="text-center text-sm font-bold text-gray-600"></div>
+                        <div id="moveWarning" class="hidden text-center text-sm font-black text-orange-600 bg-orange-50 border border-orange-300 rounded-lg p-2"></div>
+                        <div class="flex gap-3">
+                            <button onclick="closeMoveParcelModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-lg transition">Cancel</button>
+                            <button onclick="confirmMoveParcel()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">✅ Move</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
