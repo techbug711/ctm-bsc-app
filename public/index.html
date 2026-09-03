@@ -1985,7 +1985,16 @@
             }
 
             function getOutboundSearchData() {
-                return outboundInventoryCache.length > 0 ? outboundInventoryCache : allInventoryData;
+                // Prefer the LIVE listener-driven data so newly-inbounded parcels appear
+                // within ~1-2s without re-entering the OUT tab. Fall back to the one-shot
+                // cache only on cold start (before the first snapshot lands).
+                return allInventoryData.length > 0 ? allInventoryData : outboundInventoryCache;
+            }
+
+            // Normalize whitespace only (collapse runs + trim). Case is PRESERVED —
+            // exact customer names matter for grouping identity.
+            function normName(s) {
+                return (s || '').replace(/\s+/g, ' ').trim();
             }
 
             function clearSearch() {
@@ -2065,14 +2074,14 @@
                     if (isMatch) {
                         data._matchedQuery = searchQueries.find(q => awb.includes(q.trim()) || nameStr.toUpperCase().includes(q.trim().toUpperCase()));
                         directMatches.add(data);
-                        if (data.customerName) namesToGroup.add(data.customerName.trim());
+                        if (data.customerName) namesToGroup.add(normName(data.customerName));
                     }
                 });
 
                 let finalParcelsToDisplay = new Set([...directMatches]);
                 localData.forEach(data => {
                     if (data.customerName) {
-                        if (namesToGroup.has(data.customerName.trim())) finalParcelsToDisplay.add(data);
+                        if (namesToGroup.has(normName(data.customerName))) finalParcelsToDisplay.add(data);
                     }
                 });
 
@@ -2085,10 +2094,10 @@
                             serverMatches.forEach(data => {
                                 data._matchedQuery = searchQueries.find(q => (data.full_awb || '').toUpperCase().includes(q.trim()) || (data.customerName || '').toUpperCase().includes(q.trim().toUpperCase()));
                                 finalParcelsToDisplay.add(data);
-                                if (data.customerName) namesToGroup.add(data.customerName.trim());
+                                if (data.customerName) namesToGroup.add(normName(data.customerName));
                             });
                             localData.forEach(data => {
-                                if (data.customerName && namesToGroup.has(data.customerName.trim())) finalParcelsToDisplay.add(data);
+                                if (data.customerName && namesToGroup.has(normName(data.customerName))) finalParcelsToDisplay.add(data);
                             });
                         }
                     } catch (e) {
