@@ -310,6 +310,11 @@
   <h2 id="inbound">4. IN — Scanning Parcels In</h2>
   <p>This is the most-used screen. It assigns each incoming parcel to the next available slot.</p>
 
+  <div class="figure">
+    <img src="assets/tab-inbound.png" alt="IN tab — scanning parcels in">
+    <div class="caption">Figure 3 — The IN tab: set the target slot, then scan or type the AWB.</div>
+  </div>
+
   <h3>4.1 Setting the target slot</h3>
   <p>At the top of the IN screen are four fields that determine where the next parcel goes:</p>
   <ul>
@@ -364,7 +369,7 @@
         <text x="760" y="148" font-size="22" font-weight="800" fill="#92400e" text-anchor="middle">H-2-4</text>
       </g>
     </svg>
-    <div class="caption">Figure 3 — A parcel's address is Rack (letter) + Level (number) + Slot (number).</div>
+    <div class="caption">Figure 4 — A parcel's address is Rack (letter) + Level (number) + Slot (number).</div>
   </div>
 
   <h3>4.2 Scanning a parcel</h3>
@@ -391,6 +396,11 @@
   <h2 id="outbound">5. OUT — Retrieving Parcels</h2>
   <p>Use this screen when a customer comes to collect their parcel(s).</p>
 
+  <div class="figure">
+    <img src="assets/tab-outbound.png" alt="OUT tab — retrieving parcels">
+    <div class="caption">Figure 5 — The OUT tab: search by tracking number to find and collect parcels.</div>
+  </div>
+
   <h3>5.1 Searching</h3>
   <div class="step"><div class="num">1</div><div>Type at least 4 digits of the tracking number (or the full AWB) and press <strong>Enter</strong>.</div></div>
   <div class="step"><div class="num">2</div><div>Matching parcels appear. You can add multiple search terms to build a list.</div></div>
@@ -407,6 +417,11 @@
 
   <h2 id="inventory">6. STOCK — Inventory Dashboard</h2>
   <p>This screen shows the full active inventory as cards. Each card shows the parcel's <strong>location</strong>, tracking number, platform badge, customer name, who scanned it in, and when.</p>
+
+  <div class="figure">
+    <img src="assets/tab-inventory.png" alt="STOCK tab — inventory dashboard">
+    <div class="caption">Figure 6 — The STOCK tab: browse, filter, search, and manage the active inventory.</div>
+  </div>
 
   <h3>6.1 Filters</h3>
   <p>Use the filter buttons to narrow the view:</p>
@@ -448,12 +463,22 @@
 
   <h2 id="bulk">9. MULTI — Bulk Consolidation</h2>
   <p>Some customers have 3 or more parcels scattered across different slots. This screen detects those customers so you can consolidate their parcels into the dedicated <strong>BULK-RACK</strong>, freeing up standard slots.</p>
+
+  <div class="figure">
+    <img src="assets/tab-bulk.png" alt="MULTI tab — bulk consolidation">
+    <div class="caption">Figure 7 — The MULTI tab: detect customers with many scattered parcels.</div>
+  </div>
   <div class="step"><div class="num">1</div><div>Tap <strong>🔄 Scan Shelves</strong>.</div></div>
   <div class="step"><div class="num">2</div><div>The system lists customers with many parcels.</div></div>
   <div class="step"><div class="num">3</div><div>Move those parcels to the BULK-RACK as directed.</div></div>
 
   <h2 id="history">10. HIST — History &amp; Undo</h2>
   <p>This screen shows the last 50 collected parcels. Each entry shows the tracking number, customer, which rack it came from, who collected it, and when.</p>
+
+  <div class="figure">
+    <img src="assets/tab-history.png" alt="HIST tab — history and undo">
+    <div class="caption">Figure 8 — The HIST tab: view recent collections and undo mistakes.</div>
+  </div>
   <h3>10.1 Deep search</h3>
   <p>Use the search box to find a specific historical AWB (searches the full history, not just the last 50).</p>
   <h3>10.2 Undo a collection</h3>
@@ -461,6 +486,11 @@
 
   <h2 id="slots">11. SLOTS — Slot Occupancy Map</h2>
   <p>This tab shows a visual map of every rack, level, and slot, with the current item count in each.</p>
+
+  <div class="figure">
+    <img src="assets/tab-slots.png" alt="SLOTS tab — slot occupancy map">
+    <div class="caption">Figure 9 — The SLOTS tab: a colour-coded map of every rack and slot.</div>
+  </div>
   <div class="step"><div class="num">1</div><div>Open the <strong>🗄️ SLOTS</strong> tab. The map loads automatically.</div></div>
   <div class="step"><div class="num">2</div><div>Tap <strong>🔄 Sync</strong> to refresh the numbers manually.</div></div>
   <p>Each cell shows the slot number, the current count, and the capacity (e.g. <code>10 / 15</code>). Colours indicate how full the slot is (see the legend below).</p>
@@ -518,7 +548,7 @@
         <text x="780" y="135" font-weight="700" fill="#b91c1c">Full</text>
       </g>
     </svg>
-    <div class="caption">Figure 4 — Slot occupancy colours: empty, partial, near-full, and full.</div>
+    <div class="caption">Figure 10 — Slot occupancy colours: empty, partial, near-full, and full.</div>
   </div>
 
   <h2 id="faq">14. Troubleshooting &amp; FAQ</h2>
