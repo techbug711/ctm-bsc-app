@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PUDO WMS — User Manual</title>
+<style>
+  :root {
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --accent-soft: #eff6ff;
+    --border: #e5e7eb;
+    --green: #16a34a;
+    --amber: #d97706;
+    --red: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    line-height: 1.6;
+    margin: 0;
+    background: #f8fafc;
+  }
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 48px;
+    background: #fff;
+  }
+  header.cover {
+    border-bottom: 4px solid var(--accent);
+    padding-bottom: 24px;
+    margin-bottom: 32px;
+  }
+  header.cover h1 {
+    font-size: 34px;
+    margin: 0 0 4px;
+    letter-spacing: -0.5px;
+  }
+  header.cover .subtitle {
+    color: var(--muted);
+    font-size: 16px;
+    margin: 0;
+  }
+  .meta {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .meta span b { color: var(--ink); }
+  h2 {
+    font-size: 22px;
+    margin: 40px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+    color: var(--ink);
+  }
+  h3 {
+    font-size: 17px;
+    margin: 24px 0 8px;
+    color: var(--accent);
+  }
+  p { margin: 8px 0; }
+  ul, ol { margin: 8px 0 8px 0; padding-left: 24px; }
+  li { margin: 4px 0; }
+  code {
+    background: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+    font-size: 0.9em;
+  }
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 16px 0;
+  }
+  .callout.warn { border-color: var(--amber); background: #fffbeb; }
+  .callout.danger { border-color: var(--red); background: #fef2f2; }
+  .callout.success { border-color: var(--green); background: #f0fdf4; }
+  .callout .title { font-weight: 700; display: block; margin-bottom: 2px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: #f8fafc; font-weight: 700; }
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 12px 0;
+  }
+  .legend .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .swatch {
+    width: 16px; height: 16px;
+    border-radius: 4px;
+    display: inline-block;
+    border: 1px solid rgba(0,0,0,0.15);
+  }
+  .swatch.green { background: #bbf7d0; }
+  .swatch.amber { background: #fbbf24; }
+  .swatch.red { background: #ef4444; }
+  .swatch.gray { background: #f3f4f6; }
+  .toc {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 24px 0;
+  }
+  .toc ol { margin: 0; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .step {
+    display: flex;
+    gap: 12px;
+    margin: 10px 0;
+  }
+  .step .num {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    margin-top: 2px;
+  }
+  .footer {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+  }
+  .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .badge.spx { background: #ffedd5; color: #9a3412; }
+  .badge.yoyi { background: #dcfce7; color: #166534; }
+  .badge.rts { background: #fee2e2; color: #991b1b; }
+  @media print {
+    body { background: #fff; }
+    .page { max-width: none; padding: 0; }
+    h2 { page-break-after: avoid; }
+    .callout, table, .step { page-break-inside: avoid; }
+    a { color: var(--ink); }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="cover">
+    <h1>PUDO WMS — User Manual</h1>
+    <p class="subtitle">CollectCo Taman Melewar · Parcel Warehouse Management System</p>
+    <div class="meta">
+      <span><b>Product:</b> PUDO WMS (ctm-bsc-app)</span>
+      <span><b>Version:</b> 1.0</span>
+      <span><b>Document date:</b> 3 September 2026</span>
+      <span><b>Audience:</b> Shop staff &amp; admin</span>
+    </div>
+  </header>
+
+  <div class="toc">
+    <strong>Contents</strong>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#login">Logging In</a></li>
+      <li><a href="#tabs">The Main Tabs</a></li>
+      <li><a href="#inbound">IN — Scanning Parcels In</a></li>
+      <li><a href="#outbound">OUT — Retrieving Parcels</a></li>
+      <li><a href="#inventory">STOCK — Inventory Dashboard</a></li>
+      <li><a href="#move">Moving a Parcel to a New Slot</a></li>
+      <li><a href="#rts">RTS — Return to Sender</a></li>
+      <li><a href="#bulk">MULTI — Bulk Consolidation</a></li>
+      <li><a href="#history">HIST — History &amp; Undo</a></li>
+      <li><a href="#slots">SLOTS — Slot Occupancy Map</a></li>
+      <li><a href="#admin">Admin Dashboard</a></li>
+      <li><a href="#legend">Colour Legend</a></li>
+      <li><a href="#faq">Troubleshooting &amp; FAQ</a></li>
+    </ol>
+  </div>
+
+  <h2 id="overview">1. Overview</h2>
+  <p>PUDO WMS is the warehouse management system used to track every parcel that arrives at, is stored in, and leaves the CollectCo Taman Melewar shop. It records <strong>where</strong> each parcel is placed (rack / level / slot), <strong>who</strong> handled it, and <strong>when</strong>.</p>
+  <p>Parcels come from two platforms, identified by their tracking number (AWB) prefix:</p>
+  <ul>
+    <li><span class="badge spx">SPX</span> — Shopee Express. AWB starts with <code>SPXMY</code> (17 characters).</li>
+    <li><span class="badge yoyi">YOYI</span> — J&amp;T Express. AWB starts with <code>680</code> (15 digits).</li>
+  </ul>
+  <p>The system is a web app that runs in any modern browser (Chrome recommended). It works on desktop, tablet, and phone. Data is stored in the cloud (Firebase) and syncs across all devices in near real time.</p>
+
+  <h2 id="login">2. Logging In</h2>
+  <p>When you open the app, you are shown a staff login screen. Tap your name and enter your personal PIN.</p>
+  <div class="callout">
+    <span class="title">Staff PINs</span>
+    Each staff member has their own PIN. Do not share PINs. The <strong>Admin</strong> login has extra powers (e.g. deleting parcels) and is shown separately at the bottom of the login screen.
+  </div>
+  <p>After logging in, your name appears in the top bar and the main interface unlocks. To end your shift, tap <strong>End Shift</strong>.</p>
+
+  <h2 id="tabs">3. The Main Tabs</h2>
+  <p>The app is organised into six tabs along the top:</p>
+  <table>
+    <tr><th>Tab</th><th>Purpose</th></tr>
+    <tr><td><strong>📥 IN</strong></td><td>Scan parcels into the warehouse and assign them a slot.</td></tr>
+    <tr><td><strong>📤 OUT</strong></td><td>Find and hand over parcels to customers.</td></tr>
+    <tr><td><strong>📊 STOCK</strong></td><td>Browse, search, and manage the full active inventory.</td></tr>
+    <tr><td><strong>🗂️ MULTI</strong></td><td>Detect customers with many scattered parcels for consolidation.</td></tr>
+    <tr><td><strong>📜 HIST</strong></td><td>View recently collected parcels and undo mistakes.</td></tr>
+    <tr><td><strong>🗄️ SLOTS</strong></td><td>See a live map of every rack/slot and how full it is.</td></tr>
+  </table>
+
+  <h2 id="inbound">4. IN — Scanning Parcels In</h2>
+  <p>This is the most-used screen. It assigns each incoming parcel to the next available slot.</p>
+
+  <h3>4.1 Setting the target slot</h3>
+  <p>At the top of the IN screen are four fields that determine where the next parcel goes:</p>
+  <ul>
+    <li><strong>Rack</strong> — a letter (e.g. <code>A</code>, <code>B</code>, <code>H</code>).</li>
+    <li><strong>Level</strong> — a number (e.g. <code>1</code>, <code>2</code>).</li>
+    <li><strong>Slot</strong> — the individual slot number within that rack/level.</li>
+    <li><strong>Max/Slot</strong> — the capacity of each slot (default <code>15</code>).</li>
+  </ul>
+  <p>The large blue number in the centre shows the <strong>next target location</strong> (e.g. <code>H-2-4</code>). Below it, the system shows how many items are already in that slot (e.g. <em>"Item 10 of 15 currently in slot"</em>).</p>
+
+  <h3>4.2 Scanning a parcel</h3>
+  <div class="step"><div class="num">1</div><div>Ensure the target slot is correct (adjust Rack/Level/Slot if needed).</div></div>
+  <div class="step"><div class="num">2</div><div>Scan the barcode using the camera scanner, or type/paste the AWB into the input box and press <strong>Enter</strong>.</div></div>
+  <div class="step"><div class="num">3</div><div>The system validates the AWB and saves it to the target slot. A green confirmation appears.</div></div>
+  <div class="step"><div class="num">4</div><div>When a slot reaches its capacity, the system plays a chime and <strong>automatically advances to the next slot</strong>.</div></div>
+
+  <h3>4.3 Using the camera scanner</h3>
+  <p>Tap <strong>📷 Start Continuous Scanner</strong> to enable the camera. Point it at the barcode — it detects and saves automatically, with a short cooldown (~1.5s) between scans. Tap <strong>🛑 Stop Scanner</strong> to turn it off.</p>
+
+  <h3>4.4 Scan feedback</h3>
+  <table>
+    <tr><th>Result</th><th>Meaning</th></tr>
+    <tr><td>✅ Saved to [slot]</td><td>Parcel successfully stored.</td></tr>
+    <tr><td>🚨 Duplicate scan</td><td>This AWB is already in the system (shows its existing location).</td></tr>
+    <tr><td>⚠️ Invalid barcode</td><td>The AWB format is wrong (must start with <code>680</code> or <code>SPXMY</code>).</td></tr>
+    <tr><td>❌ Failed to save</td><td>Network problem — the system auto-retries in the background.</td></tr>
+  </table>
+
+  <h3>4.5 Scan log</h3>
+  <p>Tap <strong>📋 Recent Scans</strong> to open the scan log, which records every scan attempt with its timestamp, staff member, and result. You can filter by AWB and view Today / Last 50 / Last 100 / Last 500 / All (7 days).</p>
+
+  <h2 id="outbound">5. OUT — Retrieving Parcels</h2>
+  <p>Use this screen when a customer comes to collect their parcel(s).</p>
+
+  <h3>5.1 Searching</h3>
+  <div class="step"><div class="num">1</div><div>Type at least 4 digits of the tracking number (or the full AWB) and press <strong>Enter</strong>.</div></div>
+  <div class="step"><div class="num">2</div><div>Matching parcels appear. You can add multiple search terms to build a list.</div></div>
+
+  <h3>5.2 Auto-found (multi-parcel customers)</h3>
+  <p>When a customer has <strong>multiple parcels</strong>, the system automatically finds and groups all parcels belonging to the same customer name. These extra parcels are marked with an <span class="badge" style="background:#dbeafe;color:#1d4ed8;">Auto-Found</span> badge.</p>
+  <div class="callout warn">
+    <span class="title">Important</span>
+    Grouping is based on the <strong>exact customer name</strong> (case-sensitive). If a customer's name was typed differently on different days, their parcels may not group automatically — search each parcel individually in that case.
+  </div>
+
+  <h3>5.3 Collecting</h3>
+  <p>Tap <strong>📦 COLLECT ALL DISPLAYED</strong> to hand over all currently displayed parcels at once, or collect parcels individually. Collected parcels move from active inventory into history.</p>
+
+  <h2 id="inventory">6. STOCK — Inventory Dashboard</h2>
+  <p>This screen shows the full active inventory as cards. Each card shows the parcel's <strong>location</strong>, tracking number, platform badge, customer name, who scanned it in, and when.</p>
+
+  <h3>6.1 Filters</h3>
+  <p>Use the filter buttons to narrow the view:</p>
+  <ul>
+    <li><strong>ALL</strong> — every active parcel.</li>
+    <li><strong>SPX</strong> — Shopee Express parcels only.</li>
+    <li><strong>YOYI</strong> — J&amp;T parcels only.</li>
+    <li><strong>🚨 RTS</strong> — parcels flagged for return to sender (T+6 or older).</li>
+  </ul>
+
+  <h3>6.2 Search &amp; sort</h3>
+  <p>Search by <strong>location</strong> (e.g. <code>H-2</code>) or <strong>tracking number</strong>. Sort by Rack (A–Z), Oldest First, or Newest First.</p>
+
+  <h3>6.3 Card actions</h3>
+  <p>Each card has action buttons:</p>
+  <ul>
+    <li><strong>🔄 Move to New Slot</strong> — relocate the parcel (see next section).</li>
+    <li><strong>📦 Move to RTS BOX</strong> / <strong>🚚 Hand to Courier</strong> — RTS workflow (see RTS section).</li>
+    <li><strong>🗑️ Admin Delete</strong> — <em>Admin only</em>. Removes the parcel to history.</li>
+  </ul>
+
+  <h2 id="move">7. Moving a Parcel to a New Slot</h2>
+  <p>If a parcel is in the wrong slot, or you need to reorganise, use the move feature.</p>
+  <div class="step"><div class="num">1</div><div>On the STOCK tab, find the parcel and tap <strong>🔄 Move to New Slot</strong>.</div></div>
+  <div class="step"><div class="num">2</div><div>A modal opens showing the parcel's AWB and current location.</div></div>
+  <div class="step"><div class="num">3</div><div>Pick the new <strong>Rack</strong>, <strong>Level</strong>, and <strong>Slot</strong> from the dropdowns.</div></div>
+  <div class="step"><div class="num">4</div><div>The modal shows the target slot's current occupancy (e.g. <em>"Item 3 of 15"</em>).</div></div>
+  <div class="step"><div class="num">5</div><div>Tap <strong>✅ Move</strong> to confirm.</div></div>
+  <div class="callout warn">
+    <span class="title">Full-slot warning</span>
+    If the target slot is already full, the modal shows a red <strong>SLOT FULL</strong> warning and asks you to confirm before overfilling. Only proceed if you are sure.
+  </div>
+
+  <h2 id="rts">8. RTS — Return to Sender</h2>
+  <p>Parcels that have been on the shelf too long (T+6 or older) must be returned to the courier. The RTS workflow has two steps:</p>
+  <div class="step"><div class="num">1</div><div><strong>📦 Move to RTS BOX</strong> — physically place the parcel in the RTS transit box and tap this. The parcel's location becomes <code>RTS-BOX</code>.</div></div>
+  <div class="step"><div class="num">2</div><div><strong>🚚 Hand to Courier</strong> — when the courier collects it, tap this. The parcel is removed from active inventory and recorded in history.</div></div>
+  <p>Parcels flagged for RTS show a red <span class="badge rts">T+6 (RTS)</span> badge on their card.</p>
+
+  <h2 id="bulk">9. MULTI — Bulk Consolidation</h2>
+  <p>Some customers have 3 or more parcels scattered across different slots. This screen detects those customers so you can consolidate their parcels into the dedicated <strong>BULK-RACK</strong>, freeing up standard slots.</p>
+  <div class="step"><div class="num">1</div><div>Tap <strong>🔄 Scan Shelves</strong>.</div></div>
+  <div class="step"><div class="num">2</div><div>The system lists customers with many parcels.</div></div>
+  <div class="step"><div class="num">3</div><div>Move those parcels to the BULK-RACK as directed.</div></div>
+
+  <h2 id="history">10. HIST — History &amp; Undo</h2>
+  <p>This screen shows the last 50 collected parcels. Each entry shows the tracking number, customer, which rack it came from, who collected it, and when.</p>
+  <h3>10.1 Deep search</h3>
+  <p>Use the search box to find a specific historical AWB (searches the full history, not just the last 50).</p>
+  <h3>10.2 Undo a collection</h3>
+  <p>If a parcel was collected by mistake, tap <strong>↩️ Undo</strong> on its history entry. The parcel is restored to active inventory.</p>
+
+  <h2 id="slots">11. SLOTS — Slot Occupancy Map</h2>
+  <p>This tab shows a visual map of every rack, level, and slot, with the current item count in each.</p>
+  <div class="step"><div class="num">1</div><div>Open the <strong>🗄️ SLOTS</strong> tab. The map loads automatically.</div></div>
+  <div class="step"><div class="num">2</div><div>Tap <strong>🔄 Sync</strong> to refresh the numbers manually.</div></div>
+  <p>Each cell shows the slot number, the current count, and the capacity (e.g. <code>10 / 15</code>). Colours indicate how full the slot is (see the legend below).</p>
+  <div class="callout">
+    <span class="title">Cost note</span>
+    The SLOTS tab does <strong>not</strong> stream live data. It loads once when you open the tab and refreshes only when you tap Sync — keeping API usage low.
+  </div>
+
+  <h2 id="admin">12. Admin Dashboard</h2>
+  <p>The admin dashboard (a separate screen) provides a live operational overview for management:</p>
+  <ul>
+    <li><strong>KPIs</strong> — total active inventory, scanned in today, collected out today, and RTS hitlist count.</li>
+    <li><strong>Periodic volume matrix</strong> — inbound/outbound for today, this week, and this month.</li>
+    <li><strong>Platform split</strong> — SPX vs YOYI doughnut chart.</li>
+    <li><strong>Staff leaderboard</strong> — today's inbound scans and outbound collections per staff.</li>
+    <li><strong>RTS hitlist</strong> — table of parcels needing return to sender.</li>
+    <li><strong>Live slot occupancy</strong> — the same colour-coded slot map as the SLOTS tab.</li>
+  </ul>
+
+  <h2 id="legend">13. Colour Legend</h2>
+  <p>The slot map uses colours to show how full each slot is:</p>
+  <div class="legend">
+    <span class="chip"><span class="swatch gray"></span> Empty (0 items)</span>
+    <span class="chip"><span class="swatch green"></span> Partially filled</span>
+    <span class="chip"><span class="swatch amber"></span> ≥70% full</span>
+    <span class="chip"><span class="swatch red"></span> Full (at capacity)</span>
+  </div>
+  <p>Full slots also show a <strong>FULL</strong> badge.</p>
+
+  <h2 id="faq">14. Troubleshooting &amp; FAQ</h2>
+
+  <h3>Q: A scan is slow or stuck.</h3>
+  <p>Check the device's Wi-Fi connection. The system needs a stable connection to save each scan. If a scan fails, it auto-retries in the background.</p>
+
+  <h3>Q: I scanned a parcel but it says "Duplicate scan".</h3>
+  <p>The AWB is already in the system. The message shows its existing location. Do not scan it again — check the existing slot.</p>
+
+  <h3>Q: A customer's multiple parcels didn't auto-group on OUT.</h3>
+  <p>Grouping matches the <strong>exact customer name</strong>. If the name was typed differently (e.g. different capitalisation), search each parcel individually.</p>
+
+  <h3>Q: The slot map shows a slot as empty but there's a parcel there.</h3>
+  <p>Tap <strong>🔄 Sync</strong> to refresh. The map is not live — it only updates when you open the tab or tap Sync.</p>
+
+  <h3>Q: I moved a parcel to the wrong slot.</h3>
+  <p>Use <strong>🔄 Move to New Slot</strong> again to correct it.</p>
+
+  <h3>Q: I collected a parcel by mistake.</h3>
+  <p>Go to the <strong>HIST</strong> tab, find the parcel, and tap <strong>↩️ Undo</strong>.</p>
+
+  <h3>Q: The camera scanner won't start.</h3>
+  <p>Allow camera permission in the browser. If it still fails, type the AWB manually into the input box.</p>
+
+  <div class="footer">
+    PUDO WMS User Manual · CollectCo Taman Melewar · Generated 3 September 2026
+  </div>
+
+</div>
+</body>
+</html>
