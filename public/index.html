@@ -207,6 +207,43 @@
                     </div>
                 </div>
 
+                <div id="moveParcelModal" class="fixed inset-0 bg-gray-900 bg-opacity-80 z-[9999] hidden flex items-center justify-center p-4">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full">
+                        <div class="p-4 border-b flex justify-between items-center bg-blue-50 rounded-t-xl">
+                            <h3 class="text-lg font-black text-blue-900">🔄 Move Parcel</h3>
+                            <button onclick="closeMoveParcelModal()" class="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
+                        </div>
+                        <div class="p-4 space-y-4">
+                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                <p class="text-xs text-gray-500 font-bold uppercase">Tracking Number</p>
+                                <p id="moveAWB" class="text-lg font-black text-gray-800 break-all">—</p>
+                                <p class="text-xs text-gray-500 font-bold uppercase mt-2">Current Location</p>
+                                <p id="moveCurrentLocation" class="text-lg font-black text-purple-700">—</p>
+                            </div>
+                            <div class="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-600 mb-1">Rack</label>
+                                    <select id="moveRack" onchange="populateMoveLevel()" class="w-full p-3 border border-gray-300 rounded-lg font-black text-lg text-center"></select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-600 mb-1">Level</label>
+                                    <select id="moveLevel" onchange="populateMoveSlot()" class="w-full p-3 border border-gray-300 rounded-lg font-black text-lg text-center"></select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-600 mb-1">Slot</label>
+                                    <select id="moveSlot" onchange="updateMoveOccupancy()" class="w-full p-3 border border-gray-300 rounded-lg font-black text-lg text-center"></select>
+                                </div>
+                            </div>
+                            <div id="moveOccupancy" class="text-center text-sm font-bold text-gray-600"></div>
+                            <div id="moveWarning" class="hidden text-center text-sm font-black text-orange-600 bg-orange-50 border border-orange-300 rounded-lg p-2"></div>
+                            <div class="flex gap-3">
+                                <button onclick="closeMoveParcelModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-lg transition">Cancel</button>
+                                <button onclick="confirmMoveParcel()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">✅ Move</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="reader"
                     class="w-full max-w-md mx-auto hidden mb-4 rounded-lg overflow-hidden border-4 border-blue-300 bg-black">
                 </div>
@@ -905,7 +942,7 @@
                     }
 
                     // THE NEW MOVE BUTTON
-                    let moveBtn = `<button onclick="moveParcel('${p.id || awb}', '${p.location}', '${awb}')" class="mt-2 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold px-4 py-2 rounded border border-blue-300 transition w-full shadow-sm flex items-center justify-center gap-2">🔄 Move to New Slot</button>`;
+                    let moveBtn = `<button onclick="openMoveParcelModal('${p.id || awb}', '${p.location}', '${awb}')" class="mt-2 text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold px-4 py-2 rounded border border-blue-300 transition w-full shadow-sm flex items-center justify-center gap-2">🔄 Move to New Slot</button>`;
 
                     let deleteBtn = '';
                     if (typeof currentUser !== 'undefined' && currentUser === 'Admin') {
@@ -977,31 +1014,118 @@
                 }
             }
 
-            // --- RELOCATE PARCEL ENGINE ---
-            async function moveParcel(docId, currentLocation, awb) {
-                // Quick, lightweight browser prompt (no complex modals needed)
-                const newLocation = prompt(`MOVE PARCEL: ${awb}\n\nCurrent Location: ${currentLocation}\n\nEnter the new Rack/Slot (e.g., B-2-1):`);
+            // --- RELOCATE PARCEL ENGINE (MODAL PICKER) ---
+            let moveParcelState = { docId: null, awb: null, currentLocation: null };
 
-                if (!newLocation) return; // Cancelled or left blank
+            function openMoveParcelModal(docId, currentLocation, awb) {
+                moveParcelState = { docId, awb, currentLocation };
+                document.getElementById('moveAWB').textContent = awb;
+                document.getElementById('moveCurrentLocation').textContent = currentLocation || 'N/A';
+                populateMoveRack();
+                document.getElementById('moveParcelModal').classList.remove('hidden');
+            }
 
-                const cleanLocation = newLocation.trim().toUpperCase();
+            function closeMoveParcelModal() {
+                document.getElementById('moveParcelModal').classList.add('hidden');
+                moveParcelState = { docId: null, awb: null, currentLocation: null };
+            }
 
-                if (cleanLocation === currentLocation.toUpperCase()) {
-                    alert("Parcel is already at that location.");
+            function populateMoveRack() {
+                const rackSel = document.getElementById('moveRack');
+                rackSel.innerHTML = '';
+                const racks = (currentRackLayout && currentRackLayout.racks) ? Object.keys(currentRackLayout.racks) : [];
+                const list = racks.length > 0 ? racks : ['A','B','C','D','E','F','G','H'];
+                list.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r; opt.textContent = r;
+                    rackSel.appendChild(opt);
+                });
+                populateMoveLevel();
+            }
+
+            function populateMoveLevel() {
+                const rack = document.getElementById('moveRack').value;
+                const levelSel = document.getElementById('moveLevel');
+                levelSel.innerHTML = '';
+                const levels = [];
+                const rackCfg = currentRackLayout && currentRackLayout.racks && currentRackLayout.racks[rack];
+                if (rackCfg && rackCfg.levels) Object.keys(rackCfg.levels).forEach(l => levels.push(l));
+                if (levels.length === 0) levels.push('0','1','2','3');
+                levels.sort((a,b) => parseInt(a) - parseInt(b));
+                levels.forEach(l => {
+                    const opt = document.createElement('option');
+                    opt.value = l; opt.textContent = l;
+                    levelSel.appendChild(opt);
+                });
+                populateMoveSlot();
+            }
+
+            function populateMoveSlot() {
+                const rack = document.getElementById('moveRack').value;
+                const level = document.getElementById('moveLevel').value;
+                const slotSel = document.getElementById('moveSlot');
+                slotSel.innerHTML = '';
+                let maxSlots = 1;
+                const rackCfg = currentRackLayout && currentRackLayout.racks && currentRackLayout.racks[rack];
+                const levelCfg = rackCfg && rackCfg.levels && rackCfg.levels[level];
+                if (levelCfg && levelCfg.maxSlots) maxSlots = levelCfg.maxSlots;
+                for (let s = 1; s <= maxSlots; s++) {
+                    const opt = document.createElement('option');
+                    opt.value = s; opt.textContent = s;
+                    slotSel.appendChild(opt);
+                }
+                updateMoveOccupancy();
+            }
+
+            function getMoveTargetLocation() {
+                const rack = document.getElementById('moveRack').value;
+                const level = document.getElementById('moveLevel').value;
+                const slot = document.getElementById('moveSlot').value;
+                return `${rack}-${level}-${slot}`;
+            }
+
+            function getMoveCapacity() {
+                const rack = document.getElementById('moveRack').value;
+                const level = document.getElementById('moveLevel').value;
+                const rackCfg = currentRackLayout && currentRackLayout.racks && currentRackLayout.racks[rack];
+                const levelCfg = rackCfg && rackCfg.levels && rackCfg.levels[level];
+                return (levelCfg && levelCfg.capacity) ? levelCfg.capacity : 10;
+            }
+
+            function updateMoveOccupancy() {
+                const loc = getMoveTargetLocation();
+                const count = allInventoryData.filter(p => p.location === loc).length;
+                const capacity = getMoveCapacity();
+                const occEl = document.getElementById('moveOccupancy');
+                const warnEl = document.getElementById('moveWarning');
+                if (count >= capacity) {
+                    occEl.innerHTML = `<span class="text-red-600 font-black">SLOT FULL (${count}/${capacity})</span>`;
+                    warnEl.textContent = `⚠️ This slot is full (${count}/${capacity}). Moving here will overfill it.`;
+                    warnEl.classList.remove('hidden');
+                } else {
+                    occEl.innerHTML = `Item ${count} of ${capacity} currently in slot`;
+                    warnEl.classList.add('hidden');
+                }
+            }
+
+            async function confirmMoveParcel() {
+                const { docId, awb, currentLocation } = moveParcelState;
+                if (!docId) return;
+                const newLocation = getMoveTargetLocation();
+                if (newLocation === (currentLocation || '').toUpperCase()) {
+                    alert('Parcel is already at that location.');
                     return;
                 }
-
+                const count = allInventoryData.filter(p => p.location === newLocation).length;
+                const capacity = getMoveCapacity();
+                if (count >= capacity) {
+                    if (!confirm(`⚠️ WARNING: ${newLocation} is FULL (${count}/${capacity}).\n\nMove ${awb} here anyway?`)) return;
+                }
                 try {
-                    // Update only the location field, preserving all timestamps and history
-                    await shopDB.collection("active_parcels").doc(docId).update({
-                        location: cleanLocation
-                    });
-
-                    // No need to call a refresh function; your real-time snapshot listener 
-                    // will instantly detect the change and update the UI automatically!
-
+                    await shopDB.collection('active_parcels').doc(docId).update({ location: newLocation });
+                    closeMoveParcelModal();
                 } catch (error) {
-                    alert("Error moving parcel: " + error.message);
+                    alert('Error moving parcel: ' + error.message);
                 }
             }
 
