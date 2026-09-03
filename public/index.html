@@ -474,6 +474,7 @@
             const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
             let allInventoryData = [];
+            let awbSet = new Set(); // Local AWB index for instant duplicate pre-filter (kept warm by the listener)
             let currentInventoryFilter = 'ALL';
             let currentInventorySort = 'LOCATION'; // THE NEW STATE
             let allHistoryData = [];
@@ -490,6 +491,10 @@
             // Detached on IN/MULTI/HIST to avoid paying for snapshots during rapid scanning.
             let activeParcelListener = null;
 
+            function rebuildAwbSet(parcels) {
+                awbSet = new Set(parcels.map(p => p.id || p.full_awb));
+            }
+
             function startRealTimeSync() {
                 console.log("📡 Fetching initial inventory data...");
                 // Initial fetch to populate allInventoryData (one-time read)
@@ -505,6 +510,7 @@
                         const locB = b.location || "UNKNOWN";
                         return locA.localeCompare(locB, undefined, { numeric: true, sensitivity: 'base' });
                     });
+                    rebuildAwbSet(parcels);
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
                     if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
                 }).catch((error) => console.error("Initial fetch error:", error));
@@ -525,6 +531,7 @@
                         const locB = b.location || "UNKNOWN";
                         return locA.localeCompare(locB, undefined, { numeric: true, sensitivity: 'base' });
                     });
+                    rebuildAwbSet(parcels);
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
                     if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
                 }, (error) => console.error("Firebase Sync Error: ", error));
@@ -694,8 +701,10 @@
                     if (tab === 'outbound') document.getElementById('searchInput').focus();
                 }
 
-                // --- TAB-AWARE LISTENER: only pay for real-time sync when needed ---
-                if (tab === 'inventory' || tab === 'outbound') {
+                // --- TAB-AWARE LISTENER: keep it warm on IN/OUT/STOCK for instant scans ---
+                // Cost is no longer a concern; a warm listener keeps the gRPC channel open and
+                // the local AWB Set fresh, eliminating cold-reconnect latency on every scan.
+                if (tab === 'inventory' || tab === 'outbound' || tab === 'inbound') {
                     attachActiveParcelListener();
                 } else {
                     detachActiveParcelListener();
@@ -1800,13 +1809,27 @@
                 const assignedLocation = getAssignedLocation();
                 logEntry.location = assignedLocation;
 
+                const payload = {
+                    full_awb: awb,
+                    last4: extractedLast4,
+                    last5: extractedLast5,
+                    last6: extractedLast6,
+                    location: assignedLocation,
+                    inboundAt: Date.now(),
+                    timestamp: Date.now(),
+                    scannedBy: currentUser || 'Admin'
+                };
+
                 try {
                     const docRef = shopDB.collection("active_parcels").doc(awb);
-                    const docSnap = await retryableGet(docRef);
 
-                    if (docSnap.exists) {
+                    // ⚡ INSTANT LOCAL PRE-FILTER (0ms): if the warm AWB Set already has it,
+                    // it's almost certainly a duplicate — but we still confirm via the transaction
+                    // below so concurrent devices can never slip a duplicate through.
+                    if (awbSet.has(awb)) {
                         playDuplicateBuzzer();
-                        const existingLocation = docSnap.data().location;
+                        const existing = allInventoryData.find(p => (p.id || p.full_awb) === awb);
+                        const existingLocation = existing ? existing.location : 'another slot';
                         statusDiv.innerHTML = `🚨 DUPLICATE SCAN! 🚨<br><span class="text-2xl">Already saved to ${existingLocation}</span><br><span class="text-lg mt-2 inline-block">AWB: ${awb}</span>`;
                         statusDiv.className = "mb-6 p-4 bg-red-100 border-4 border-red-600 text-3xl font-black text-center text-red-700 rounded-lg block shadow-lg";
                         logEntry.stage = 'duplicate';
@@ -1819,18 +1842,31 @@
                         return;
                     }
 
-                    const payload = {
-                        full_awb: awb,
-                        last4: extractedLast4,
-                        last5: extractedLast5,
-                        last6: extractedLast6,
-                        location: assignedLocation,
-                        inboundAt: Date.now(),
-                        timestamp: Date.now(),
-                        scannedBy: currentUser || 'Admin'
-                    };
+                    // 🔒 AUTHORITATIVE CHECK-AND-WRITE (transaction): serializable, so two devices
+                    // scanning the same AWB at once serialize — the second sees the doc and reports
+                    // duplicate. This is the single network round-trip that replaces read+write.
+                    const result = await db.runTransaction(async (tx) => {
+                        const snap = await tx.get(docRef);
+                        if (snap.exists) {
+                            return { duplicate: true, location: snap.data().location };
+                        }
+                        tx.set(docRef, payload);
+                        return { duplicate: false };
+                    });
 
-                    await retryableSet(docRef, payload);
+                    if (result.duplicate) {
+                        playDuplicateBuzzer();
+                        statusDiv.innerHTML = `🚨 DUPLICATE SCAN! 🚨<br><span class="text-2xl">Already saved to ${result.location}</span><br><span class="text-lg mt-2 inline-block">AWB: ${awb}</span>`;
+                        statusDiv.className = "mb-6 p-4 bg-red-100 border-4 border-red-600 text-3xl font-black text-center text-red-700 rounded-lg block shadow-lg";
+                        logEntry.stage = 'duplicate';
+                        logEntry.error = `Already saved to ${result.location}`;
+                        logEntry.firebaseWriteMs = Math.round(performance.now() - startTime);
+                        await addScanLogEntry(logEntry);
+                        awbInput.value = '';
+                        awbInput.disabled = false;
+                        manageFocusState(awbInput);
+                        return;
+                    }
 
                     statusDiv.innerHTML = `✅ Saved to <span class="text-4xl">${assignedLocation}</span><br><span class="text-xl text-green-800 block mt-2 tracking-wider">AWB: ${awb}</span>`;
                     statusDiv.className = "mb-6 p-4 bg-green-100 border-4 border-green-500 text-3xl font-black text-center text-green-700 rounded-lg block shadow-lg";
@@ -1841,14 +1877,22 @@
                     logEntry.firebaseWriteMs = Math.round(performance.now() - startTime);
                     await addScanLogEntry(logEntry);
 
-                    currentItemsInSlot++;
+                    // ⚡ OPTIMISTIC LOCAL UPDATE: immediately reflect the just-written parcel in the
+                    // local cache so the slot count and duplicate Set are correct without waiting
+                    // for the snapshot to propagate (which can lag a few hundred ms).
+                    const localParcel = { id: awb, ...payload };
+                    allInventoryData.push(localParcel);
+                    awbSet.add(awb);
 
-                    if (currentItemsInSlot >= parseInt(slotCapacity.value)) {
+                    // 📊 SNAPSHOT-DERIVED SLOT COUNT: recompute from the shared listener data
+                    // instead of a local ++, so multiple devices stay in sync and never overfill.
+                    refreshSlotData();
+                    const itemsNow = allInventoryData.filter(p => p.location === assignedLocation).length;
+                    if (itemsNow >= parseInt(slotCapacity.value)) {
                         playSlotFullChime();
                         advanceToNextSlot();
                     } else {
                         playSuccessBeep();
-                        capacityDisplay.textContent = `Item ${currentItemsInSlot} of ${slotCapacity.value} currently in slot`;
                     }
                     manageFocusState(awbInput);
                 } catch (error) {
@@ -1907,11 +1951,11 @@
                         document.getElementById('awbInput').value = decodedText;
                         inboundForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
-                        startCameraBtn.innerHTML = '⏳ Saving... Next scan in 2s';
+                        startCameraBtn.innerHTML = '⏳ Saving... Next scan in 0.5s';
                         setTimeout(() => {
                             isCameraCooldown = false;
                             if (isCameraActive) startCameraBtn.innerHTML = '🛑 Stop Scanner';
-                        }, 2000);
+                        }, 500);
                     },
                     (errorMessage) => { }
                 ).catch((err) => {
