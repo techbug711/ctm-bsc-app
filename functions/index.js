@@ -1,4 +1,4 @@
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, beforeDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
@@ -15,6 +15,23 @@ function getKLDateString(timestampMs) {
         day: '2-digit'
     }).format(date);
 }
+
+function isValidPudoAwb(awb) {
+    if (!awb) return false;
+    const upper = String(awb).toUpperCase().trim();
+    if (/^680\d{12}$/.test(upper)) return true;
+    if (/^SPXMY\d{12}$/.test(upper)) return true;
+    return false;
+}
+
+// 🛡️ SERVER-SIDE GUARD: Reject any active_parcel document that is not Yoyi or SPX.
+exports.enforceActiveParcelFormat = beforeDocumentCreated('shops/{shopId}/active_parcels/{awb}', (event) => {
+    const awb = event.params.awb;
+    if (!isValidPudoAwb(awb)) {
+        console.warn(`🛡️ Rejected invalid AWB write to active_parcels: ${awb}`);
+        throw new Error(`Invalid AWB format: ${awb}. Only Yoyi (680...) and SPX (SPXMY...) parcels are allowed in PUDO WMS.`);
+    }
+});
 
 // 📥 TRIGGER 1: When a new parcel is scanned IN
 exports.aggregateInbound = onDocumentCreated('shops/{shopId}/active_parcels/{awb}', async (event) => {

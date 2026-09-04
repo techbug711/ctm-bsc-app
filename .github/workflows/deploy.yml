@@ -24,7 +24,7 @@ jobs:
 
       # Step 4: Deploy to Firebase
       - name: Deploy to Firebase
-        run: firebase deploy --only hosting
+        run: firebase deploy
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
