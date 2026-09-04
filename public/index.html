@@ -2477,18 +2477,27 @@
 
             async function markCollected(awbId) {
                 try {
-                    const data = currentDisplayedData[awbId];
-                    if (data) {
-                        data.collectedAt = Date.now();
-                        data.collectedBy = currentUser || 'Admin';
+                    let data = currentDisplayedData[awbId];
 
-                        const batch = db.batch();
-                        batch.set(shopDB.collection("collected_parcels").doc(awbId), data);
-                        batch.delete(shopDB.collection("active_parcels").doc(awbId));
-                        await batch.commit();
-                    } else {
-                        await shopDB.collection("active_parcels").doc(awbId).delete();
+                    // 🛡️ SAFETY: never delete from active_parcels without a matching
+                    // collected_parcels write. If the local map is stale/missing, fetch
+                    // the doc from Firestore first. If it's genuinely gone, abort.
+                    if (!data) {
+                        const snap = await shopDB.collection("active_parcels").doc(awbId).get();
+                        if (!snap.exists) {
+                            alert("Parcel not found — it may have already been collected. Refresh and try again.");
+                            return;
+                        }
+                        data = snap.data();
                     }
+
+                    data.collectedAt = Date.now();
+                    data.collectedBy = currentUser || 'Admin';
+
+                    const batch = db.batch();
+                    batch.set(shopDB.collection("collected_parcels").doc(awbId), data);
+                    batch.delete(shopDB.collection("active_parcels").doc(awbId));
+                    await batch.commit();
 
                     const card = document.getElementById(`card-${awbId}`);
                     if (card) card.remove();
@@ -2532,13 +2541,19 @@
                 collectAllBtn.innerHTML = "⏳ Processing...";
                 try {
                     const batch = db.batch();
+                    let skipped = 0;
                     currentDisplayedIds.forEach(id => {
                         const data = currentDisplayedData[id];
-                        if (data) {
-                            data.collectedAt = Date.now();
-                            data.collectedBy = currentUser || 'Admin';
-                            batch.set(shopDB.collection("collected_parcels").doc(id), data);
+                        // 🛡️ SAFETY: never delete from active_parcels without a matching
+                        // collected_parcels write. Skip ids with missing data rather than
+                        // silently deleting them with no history record.
+                        if (!data) {
+                            skipped++;
+                            return;
                         }
+                        data.collectedAt = Date.now();
+                        data.collectedBy = currentUser || 'Admin';
+                        batch.set(shopDB.collection("collected_parcels").doc(id), data);
                         batch.delete(shopDB.collection("active_parcels").doc(id));
                     });
                     await batch.commit();
@@ -2550,7 +2565,11 @@
                     searchInput.focus();
                     searchDbBtn.classList.add('hidden');
 
-                    resultsArea.innerHTML = '<p class="text-green-600 text-2xl font-bold text-center mt-8">✅ All parcels collected.</p>';
+                    if (skipped > 0) {
+                        resultsArea.innerHTML = `<p class="text-amber-600 text-xl font-bold text-center mt-8">✅ Collected, but ${skipped} parcel(s) were skipped (data missing). Please refresh and check.</p>`;
+                    } else {
+                        resultsArea.innerHTML = '<p class="text-green-600 text-2xl font-bold text-center mt-8">✅ All parcels collected.</p>';
+                    }
                     collectAllBtn.classList.add('hidden');
                     collectAllBtn.innerHTML = "📦 COLLECT ALL DISPLAYED";
 
