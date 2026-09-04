@@ -1717,6 +1717,13 @@
                 if (!failed.length) return;
                 console.log(`🔁 Auto-retrying ${failed.length} failed scan(s)...`);
                 for (const entry of failed) {
+                    // 🚫 NEVER auto-retry validation failures — only network/transient errors.
+                    // Invalid-format scans (e.g. MY-prefix) must stay rejected, not silently
+                    // written to active_parcels on the next retry tick.
+                    if (entry.error && String(entry.error).startsWith('Invalid format')) {
+                        await updateScanLogEntry(entry.id, { stage: 'failed', error: entry.error, retryNote: 'Skipped: invalid format (not retryable)' });
+                        continue;
+                    }
                     try {
                         const docRef = shopDB.collection('active_parcels').doc(entry.awb);
                         const exists = await docRef.get();
