@@ -1934,11 +1934,7 @@
                 }
 
                 if (currentItemsInSlot >= parseInt(slotCapacity.value)) {
-                    capacityDisplay.innerHTML = `<span class="text-red-600 font-black">SLOT FULL (${currentItemsInSlot}/${slotCapacity.value})</span> - Jumping to next...`;
-                    setTimeout(() => {
-                        // Triggers the Variable Geometry engine we built yesterday
-                        advanceToNextSlot();
-                    }, 1500);
+                    capacityDisplay.innerHTML = `<span class="text-red-600 font-black">SLOT FULL (${currentItemsInSlot}/${slotCapacity.value})</span>`;
                 } else {
                     capacityDisplay.textContent = `Item ${currentItemsInSlot} of ${slotCapacity.value} currently in slot`;
                 }
