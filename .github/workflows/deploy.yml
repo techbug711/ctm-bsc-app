@@ -22,11 +22,10 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      # Step 4: Write service account key to file for Firebase CLI
+      # Step 4: Decode base64 service account key to file for Firebase CLI
       - name: Write service account key
         run: |
-          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' > /home/runner/gcloud-service-key.json
-          cat /home/runner/gcloud-service-key.json | head -1
+          printf '%s' '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_B64 }}' | base64 -d > /home/runner/gcloud-service-key.json
 
       # Step 5: Deploy to Firebase
       - name: Deploy to Firebase
