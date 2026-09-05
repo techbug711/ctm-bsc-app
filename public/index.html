@@ -2065,6 +2065,23 @@
                     scannedBy: currentUser || 'Admin'
                 };
 
+                // 🛡️ FORMAT GUARD: only Yoyi (680...) and SPX (SPXMY...) AWBs may enter WMS.
+                // Runs locally before any network round-trip; rejects junk like URLs or partial scans.
+                const isValidAwb = /^680\d{12}$/.test(awb) || /^SPXMY\d{12}$/.test(awb);
+                if (!isValidAwb) {
+                    playErrorBuzzer();
+                    statusDiv.innerHTML = `🚫 INVALID AWB FORMAT 🚫<br><span class="text-2xl">Only 680... or SPXMY... allowed</span><br><span class="text-lg mt-2 inline-block">Scanned: ${awb}</span>`;
+                    statusDiv.className = "mb-6 p-4 bg-red-100 border-4 border-red-600 text-3xl font-black text-center text-red-700 rounded-lg block shadow-lg";
+                    logEntry.stage = 'invalid_format';
+                    logEntry.error = `Rejected invalid AWB format: ${awb}`;
+                    logEntry.firebaseWriteMs = 0;
+                    await addScanLogEntry(logEntry);
+                    awbInput.value = '';
+                    awbInput.disabled = false;
+                    manageFocusState(awbInput);
+                    return;
+                }
+
                 try {
                     const docRef = shopDB.collection("active_parcels").doc(awb);
 
