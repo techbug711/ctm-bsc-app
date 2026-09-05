@@ -25,13 +25,14 @@ jobs:
       # Step 4: Write service account key to file for Firebase CLI
       - name: Write service account key
         run: |
-          printf '%s' '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' > $HOME/gcloud-service-key.json
+          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' > /home/runner/gcloud-service-key.json
+          cat /home/runner/gcloud-service-key.json | head -1
 
       # Step 5: Deploy to Firebase
       - name: Deploy to Firebase
         run: firebase deploy --only hosting
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcloud-service-key.json
+          GOOGLE_APPLICATION_CREDENTIALS: /home/runner/gcloud-service-key.json
 
       # Step 5: Send Telegram Notification
       - name: Send Telegram Notification
