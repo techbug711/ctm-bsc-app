@@ -2142,8 +2142,15 @@
                     // ⚡ OPTIMISTIC LOCAL UPDATE: immediately reflect the just-written parcel in the
                     // local cache so the slot count and duplicate Set are correct without waiting
                     // for the snapshot to propagate (which can lag a few hundred ms).
-                    const localParcel = { id: awb, ...payload };
-                    allInventoryData.push(localParcel);
+                    // 🛡️ GUARD AGAINST DOUBLE-COUNT: a local Firestore write can trigger the
+                    // onSnapshot listener BEFORE this continuation runs, so the parcel may already
+                    // be in allInventoryData. Pushing again would inflate the slot count by one and
+                    // cause the slot to "jump" one item early (e.g. capacity 15 jumping at 14).
+                    const alreadyInLocal = allInventoryData.some(p => (p.id || p.full_awb) === awb);
+                    if (!alreadyInLocal) {
+                        const localParcel = { id: awb, ...payload };
+                        allInventoryData.push(localParcel);
+                    }
                     awbSet.add(awb);
 
                     // 📊 SNAPSHOT-DERIVED SLOT COUNT: recompute from the shared listener data
