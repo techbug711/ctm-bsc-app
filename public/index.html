@@ -411,15 +411,13 @@
             };
             firebase.initializeApp(firebaseConfig);
             const db = firebase.firestore();
-            // ENABLE FIREBASE OFFLINE CACHE (PWA Optimized - Single Window)
-            db.enablePersistence()
-                .catch((err) => {
-                    if (err.code == 'failed-precondition') {
-                        console.warn("Multiple windows open, persistence failed.");
-                    } else if (err.code == 'unimplemented') {
-                        console.warn("Browser doesn't support offline persistence.");
-                    }
-                });
+            // 🔒 OFFLINE PERSISTENCE DISABLED (2026-09-09):
+            // Previously enabled, but on flaky shop Wi-Fi a batch.commit() could be
+            // queued locally and resolve "success" without ever reaching the server —
+            // causing parcels to silently reappear in active_parcels after a "collect".
+            // With persistence off, every write either reaches Firestore or throws a
+            // visible error. Accuracy > offline tolerance for a WMS.
+            db.settings({ ignoreUndefinedProperties: true });
 
             // --- SAAS GATEKEEPER & FEATURE GATING ---
             let currentShopId = null;
