@@ -2715,20 +2715,35 @@
             }
 
             async function moveParcelsToBulk(stringifiedIds, customerName, inputId) {
-                const docIds = JSON.parse(stringifiedIds.replace(/&quot;/g, '"'));
-                const destinationRack = document.getElementById(inputId).value.toUpperCase().trim() || 'BULK-RACK';
+                let docIds;
+                try {
+                    docIds = JSON.parse(stringifiedIds.replace(/&quot;/g, '"'));
+                } catch (e) {
+                    console.error('moveParcelsToBulk: parse error', e);
+                    await uiAlert('Failed to read parcel list. Please refresh and try again.', 'Error');
+                    return;
+                }
+                const inputEl = document.getElementById(inputId);
+                const destinationRack = (inputEl ? inputEl.value : '').toUpperCase().trim() || 'BULK-RACK';
                 if (!(await uiConfirm(`Are you sure you have physically moved all ${docIds.length} parcels for ${customerName} to ${destinationRack}?`, 'Mark as MOVED'))) return;
 
                 try {
-                    const batch = db.batch();
-                    docIds.forEach(id => {
-                        const docRef = shopDB.collection("active_parcels").doc(id);
-                        batch.update(docRef, { location: destinationRack });
+                    // 🔒 SERVER-VERIFIED MOVE (transaction): requires a live network round-trip,
+                    // so it either commits to the server or throws a visible error — no silent
+                    // queueing under offline persistence. Also re-reads each doc so a parcel
+                    // already collected on another device is caught instead of failing the batch.
+                    await db.runTransaction(async (tx) => {
+                        for (const id of docIds) {
+                            const docRef = shopDB.collection("active_parcels").doc(id);
+                            const snap = await tx.get(docRef);
+                            if (!snap.exists) {
+                                throw new Error(`Parcel ${id} is no longer on the shelf (already collected).`);
+                            }
+                            tx.update(docRef, { location: destinationRack });
+                        }
                     });
-                    await batch.commit();
+
                     // Refresh local cache from Firestore so the Multi tab (no listener) re-renders fresh.
-                    // One extra read per move, but the move itself is already a batch write.
-                    // Sort by location to match the order used everywhere else in the app.
                     const freshSnap = await shopDB.collection("active_parcels").get();
                     allInventoryData = freshSnap.docs.map(d => ({ id: d.id, ...d.data() }))
                         .sort((a, b) => {
@@ -2739,7 +2754,8 @@
                     showToast(`✅ Moved ${docIds.length} parcels to ${destinationRack}`, 'success');
                     loadBulkTab();
                 } catch (error) {
-                    showToast(`❌ Error moving parcels: ${error.message}`, 'error');
+                    console.error('moveParcelsToBulk: error', error);
+                    await uiAlert('Error moving parcels: ' + error.message, 'Error');
                 }
             }
 
