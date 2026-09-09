@@ -912,7 +912,10 @@
                 }
                 if (tab === 'outbound') {
                     document.getElementById('searchInput').value = '';
-                    refreshOutboundData();
+                    // Only fetch the cold-start fallback cache when the live listener data
+                    // isn't warm yet. Once allInventoryData is populated, the listener keeps
+                    // it fresh, so a full re-fetch on every tab switch is wasted.
+                    if (allInventoryData.length === 0) refreshOutboundData();
                     if (searchQueries.length > 0) executeLocalSearch();
                 }
                 if (tab === 'bulk') loadBulkTab();
