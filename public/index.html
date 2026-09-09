@@ -488,7 +488,7 @@
                         document.getElementById('staff-buttons-container').innerHTML = staffHTML;
                         console.log(`Workspace Loaded: ${currentShopTier.toUpperCase()} Tier. Staff allowed: ${maxStaffAllowed}`);
                     } else {
-                        alert("System Error: Unregistered Workspace ID.");
+                        uiAlert("System Error: Unregistered Workspace ID.", 'Error');
                     }
                 }).catch(error => console.error("Failed to authenticate workspace:", error));
             }
@@ -514,11 +514,11 @@
                 const pass = document.getElementById('authPassword').value;
                 firebase.auth().signInWithEmailAndPassword(email, pass)
                     .then(() => console.log("Workspace Master Unlocked."))
-                    .catch(error => alert("Authentication Failed: " + error.message));
+                    .catch(error => uiAlert("Authentication Failed: " + error.message, 'Login Failed'));
             }
 
-            function lockMasterDevice() {
-                if (confirm("Lock this device? You will need the master email and password to scan parcels again.")) {
+            async function lockMasterDevice() {
+                if (await uiConfirm("Lock this device? You will need the master email and password to scan parcels again.", 'Lock Device')) {
                     firebase.auth().signOut();
                 }
             }
@@ -728,8 +728,8 @@
             }
 
             // --- SHIFT LOGIN LOGIC ---
-            function loginWithPin(name, correctPin) {
-                const enteredPin = prompt(`Enter PIN for ${name}:`);
+            async function loginWithPin(name, correctPin) {
+                const enteredPin = await uiPrompt(`Enter PIN for ${name}:`, 'Staff Login');
                 if (enteredPin === correctPin) {
                     currentUser = name;
                     document.getElementById('currentUserDisplay').textContent = name;
@@ -740,7 +740,7 @@
                     startRealTimeSync();
                     if (!isTouchDevice) document.getElementById('awbInput').focus();
                 } else if (enteredPin !== null) {
-                    alert("Incorrect PIN.");
+                    await uiAlert("Incorrect PIN.", 'Login Failed');
                 }
             }
 
@@ -1110,10 +1110,10 @@
 
             async function adminDeleteParcel(awb) {
                 if (currentUser !== 'Admin') {
-                    alert("Security block: Only Admins can delete items directly from the dashboard.");
+                    await uiAlert("Security block: Only Admins can delete items directly from the dashboard.", 'Access Denied');
                     return;
                 }
-                if (confirm(`⚠️ WARNING: Move AWB ${awb} to the History trash?`)) {
+                if (await uiConfirm(`⚠️ WARNING: Move AWB ${awb} to the History trash?`, 'Delete Parcel')) {
                     try {
                         const docRef = shopDB.collection("active_parcels").doc(awb);
                         const snap = await docRef.get();
@@ -1127,10 +1127,10 @@
                             batch.delete(docRef);
                             await batch.commit();
                         }
-                        alert(`✅ AWB ${awb} moved to History.`);
+                        await uiAlert(`✅ AWB ${awb} moved to History.`, 'Done');
                         document.getElementById('inventorySearchInput').value = '';
                     } catch (error) {
-                        alert("Error deleting parcel: " + error.message);
+                        await uiAlert("Error deleting parcel: " + error.message, 'Error');
                     }
                 }
             }
@@ -1234,19 +1234,19 @@
                 if (!docId) return;
                 const newLocation = getMoveTargetLocation();
                 if (newLocation === (currentLocation || '').toUpperCase()) {
-                    alert('Parcel is already at that location.');
+                    await uiAlert('Parcel is already at that location.', 'No Change');
                     return;
                 }
                 const count = allInventoryData.filter(p => p.location === newLocation).length;
                 const capacity = getMoveCapacity();
                 if (count >= capacity) {
-                    if (!confirm(`⚠️ WARNING: ${newLocation} is FULL (${count}/${capacity}).\n\nMove ${awb} here anyway?`)) return;
+                    if (!(await uiConfirm(`⚠️ WARNING: ${newLocation} is FULL (${count}/${capacity}).\n\nMove ${awb} here anyway?`, 'Slot Full'))) return;
                 }
                 try {
                     await shopDB.collection('active_parcels').doc(docId).update({ location: newLocation });
                     closeMoveParcelModal();
                 } catch (error) {
-                    alert('Error moving parcel: ' + error.message);
+                    await uiAlert('Error moving parcel: ' + error.message, 'Error');
                 }
             }
 
@@ -1257,7 +1257,7 @@
 
             // 1. Move to physical transit box
             async function moveToRtsBox(docId, awb) {
-                if (!confirm(`Are you sure you moved ${awb} into the physical RTS Box?`)) return;
+                if (!(await uiConfirm(`Are you sure you moved ${awb} into the physical RTS Box?`, 'RTS Box'))) return;
 
                 try {
                     const docRef = shopDB.collection("active_parcels").doc(docId);
@@ -1270,13 +1270,13 @@
                     });
 
                 } catch (error) {
-                    alert("Error moving parcel: " + error.message);
+                    await uiAlert("Error moving parcel: " + error.message, 'Error');
                 }
             }
 
             // 2. Final handover to courier (Moves to History)
             async function handoverRtsToCourier(docId, awb) {
-                if (!confirm(`Confirm handover of RTS parcel ${awb} to the courier? This removes it from active inventory.`)) return;
+                if (!(await uiConfirm(`Confirm handover of RTS parcel ${awb} to the courier? This removes it from active inventory.`, 'RTS Handover'))) return;
 
                 try {
                     const docRef = shopDB.collection("active_parcels").doc(docId);
@@ -1296,10 +1296,10 @@
                         await batch.commit();
 
                     } else {
-                        alert("Parcel not found. It may have already been collected.");
+                        await uiAlert("Parcel not found. It may have already been collected.", 'Not Found');
                     }
                 } catch (error) {
-                    alert("Error during courier handover: " + error.message);
+                    await uiAlert("Error during courier handover: " + error.message, 'Error');
                 }
             }
 
@@ -1380,7 +1380,7 @@
             }
 
             async function undoCollect(awbId) {
-                if (!confirm(`Return parcel ${awbId} back to the active shelves?`)) return;
+                if (!(await uiConfirm(`Return parcel ${awbId} back to the active shelves?`, 'Return to Shelf'))) return;
                 try {
                     const docRef = shopDB.collection("collected_parcels").doc(awbId);
                     const docSnap = await docRef.get();
@@ -1396,12 +1396,12 @@
 
                         const card = document.getElementById(`hist-${awbId}`);
                         if (card) card.remove();
-                        alert("✅ Parcel safely restored to Active Inventory!");
+                        await uiAlert("✅ Parcel safely restored to Active Inventory!", 'Done');
                     } else {
-                        alert("Error: Parcel data not found in history.");
+                        await uiAlert("Error: Parcel data not found in history.", 'Error');
                     }
                 } catch (e) {
-                    alert("Error restoring parcel: " + e.message);
+                    await uiAlert("Error restoring parcel: " + e.message, 'Error');
                 }
             }
 
@@ -1416,7 +1416,7 @@
 
                 const query = searchInput.value.trim().toUpperCase();
                 if (!query) {
-                    alert("Please enter a Tracking Number (AWB) to search.");
+                    await uiAlert("Please enter a Tracking Number (AWB) to search.", 'Search');
                     return;
                 }
 
@@ -1594,7 +1594,7 @@
                     showToast('Only Admin can clear the scan log.', 'error');
                     return;
                 }
-                if (!confirm('Clear all scan log entries? This cannot be undone.')) return;
+                if (!(await uiConfirm('Clear all scan log entries? This cannot be undone.', 'Clear Log'))) return;
                 try {
                     const db = await openScanLogDb();
                     const tx = db.transaction(SCAN_LOG_STORE, 'readwrite');
@@ -2231,7 +2231,7 @@
                     },
                     (errorMessage) => { }
                 ).catch((err) => {
-                    isCameraActive = false; alert("Camera access denied.");
+                    isCameraActive = false; uiAlert("Camera access denied.", 'Camera');
                 });
             });
 
@@ -2280,7 +2280,7 @@
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     const value = e.target.value.toUpperCase().trim();
-                    if (value.length < 4) { alert("Please enter at least 4 digits."); return; }
+                    if (value.length < 4) { uiAlert("Please enter at least 4 digits.", 'Search'); return; }
 
                     if (!searchQueries.includes(value)) {
                         searchQueries.push(value);
@@ -2518,7 +2518,7 @@
                     if (!data) {
                         const snap = await shopDB.collection("active_parcels").doc(awbId).get();
                         if (!snap.exists) {
-                            alert("Parcel not found — it may have already been collected. Refresh and try again.");
+                            await uiAlert("Parcel not found — it may have already been collected. Refresh and try again.", 'Not Found');
                             if (btn) { btn.disabled = false; btn.innerHTML = 'Collect'; }
                             return;
                         }
@@ -2579,7 +2579,7 @@
                         }, 1500);
                     }
                 } catch (error) {
-                    alert("Error updating database: " + error.message);
+                    await uiAlert("Error updating database: " + error.message, 'Error');
                     if (btn) { btn.disabled = false; btn.innerHTML = 'Collect'; }
                 }
             }
@@ -2624,7 +2624,7 @@
                         if (searchQueries.length === 0) resultsArea.innerHTML = '';
                     }, 1500);
                 } catch (error) {
-                    alert("Error collecting all: " + error.message);
+                    await uiAlert("Error collecting all: " + error.message, 'Error');
                     collectAllBtn.innerHTML = "📦 COLLECT ALL DISPLAYED";
                 }
             });
@@ -2717,7 +2717,7 @@
             async function moveParcelsToBulk(stringifiedIds, customerName, inputId) {
                 const docIds = JSON.parse(stringifiedIds.replace(/&quot;/g, '"'));
                 const destinationRack = document.getElementById(inputId).value.toUpperCase().trim() || 'BULK-RACK';
-                if (!confirm(`Are you sure you have physically moved all ${docIds.length} parcels for ${customerName} to ${destinationRack}?`)) return;
+                if (!(await uiConfirm(`Are you sure you have physically moved all ${docIds.length} parcels for ${customerName} to ${destinationRack}?`, 'Mark as MOVED'))) return;
 
                 try {
                     const batch = db.batch();
@@ -2767,10 +2767,77 @@
                 }, 3000);
             }
 
+            // --- IN-APP DIALOG SYSTEM (replaces native alert/confirm/prompt) ---
+            // Native dialogs are silently disabled in standalone PWAs on Android Chrome,
+            // so every alert()/confirm()/prompt() must go through these instead.
+            function uiAlert(message, title) {
+                return new Promise((resolve) => {
+                    const overlay = document.getElementById('uiDialogOverlay');
+                    document.getElementById('uiDialogTitle').textContent = title || 'Notice';
+                    document.getElementById('uiDialogBody').textContent = message;
+                    document.getElementById('uiDialogInputWrap').classList.add('hidden');
+                    document.getElementById('uiDialogCancel').classList.add('hidden');
+                    const ok = document.getElementById('uiDialogOk');
+                    ok.textContent = 'OK';
+                    ok.onclick = () => { overlay.classList.add('hidden'); resolve(); };
+                    overlay.classList.remove('hidden');
+                });
+            }
+
+            function uiConfirm(message, title) {
+                return new Promise((resolve) => {
+                    const overlay = document.getElementById('uiDialogOverlay');
+                    document.getElementById('uiDialogTitle').textContent = title || 'Confirm';
+                    document.getElementById('uiDialogBody').textContent = message;
+                    document.getElementById('uiDialogInputWrap').classList.add('hidden');
+                    document.getElementById('uiDialogCancel').classList.remove('hidden');
+                    const ok = document.getElementById('uiDialogOk');
+                    const cancel = document.getElementById('uiDialogCancel');
+                    ok.textContent = 'OK';
+                    ok.onclick = () => { overlay.classList.add('hidden'); resolve(true); };
+                    cancel.onclick = () => { overlay.classList.add('hidden'); resolve(false); };
+                    overlay.classList.remove('hidden');
+                });
+            }
+
+            function uiPrompt(message, title) {
+                return new Promise((resolve) => {
+                    const overlay = document.getElementById('uiDialogOverlay');
+                    document.getElementById('uiDialogTitle').textContent = title || 'Input';
+                    document.getElementById('uiDialogBody').textContent = message;
+                    const inputWrap = document.getElementById('uiDialogInputWrap');
+                    inputWrap.classList.remove('hidden');
+                    const input = document.getElementById('uiDialogInput');
+                    input.value = '';
+                    document.getElementById('uiDialogCancel').classList.remove('hidden');
+                    const ok = document.getElementById('uiDialogOk');
+                    const cancel = document.getElementById('uiDialogCancel');
+                    ok.textContent = 'OK';
+                    ok.onclick = () => { const v = input.value; overlay.classList.add('hidden'); resolve(v); };
+                    cancel.onclick = () => { overlay.classList.add('hidden'); resolve(null); };
+                    overlay.classList.remove('hidden');
+                    setTimeout(() => input.focus(), 50);
+                });
+            }
+
         </script>
     </div>
     <!-- Toast container (fixed top-right, stackable) -->
     <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none" aria-live="polite" aria-atomic="true"></div>
+    <!-- Generic in-app dialog (replaces native alert/confirm/prompt, which are silently disabled in standalone PWA) -->
+    <div id="uiDialogOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-70 z-[10000] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div id="uiDialogTitle" class="text-lg font-black text-gray-900 mb-2"></div>
+            <div id="uiDialogBody" class="text-sm text-gray-700 mb-4 whitespace-pre-line"></div>
+            <div id="uiDialogInputWrap" class="mb-4 hidden">
+                <input type="password" id="uiDialogInput" class="w-full p-3 border-2 border-gray-300 rounded-lg text-center font-black text-xl" />
+            </div>
+            <div class="flex gap-2 justify-end">
+                <button id="uiDialogCancel" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-lg transition">Cancel</button>
+                <button id="uiDialogOk" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">OK</button>
+            </div>
+        </div>
+    </div>
     <script>
         // Register Service Worker for PWA Standalone Mode
         if ('serviceWorker' in navigator) {
