@@ -436,6 +436,17 @@
                 currentShopId = urlParams.get('shop') || 'ctm_melewar';
                 shopDB = db.collection("shops").doc(currentShopId);
 
+                // ⚡ INSTANT SHIFT PROFILE: render staff buttons from a localStorage cache
+                // immediately (0ms), so the login screen appears without waiting on the
+                // Firestore read (which is slow on cold reload with offline persistence).
+                // The fresh shop doc is fetched in parallel and reconciles if anything changed.
+                const cacheKey = `wms_shop_${currentShopId}`;
+                let cached = null;
+                try { cached = JSON.parse(localStorage.getItem(cacheKey) || 'null'); } catch (e) { cached = null; }
+                if (cached && cached.staffProfiles) {
+                    renderStaffButtons(cached);
+                }
+
                 shopDB.get().then((doc) => {
                     if (doc.exists) {
                         const shopData = doc.data();
@@ -449,48 +460,62 @@
                             return;
                         }
 
-                        currentShopTier = shopData.tier ? shopData.tier.toLowerCase() : 'basic';
-                        currentRackLayout = shopData.rackLayout || null;
-                        document.title = `${shopData.shopName} - PUDO WMS`;
+                        // Cache the essentials for next reload (staff profiles + tier + title).
+                        try {
+                            localStorage.setItem(cacheKey, JSON.stringify({
+                                staffProfiles: shopData.staffProfiles,
+                                tier: shopData.tier,
+                                shopName: shopData.shopName
+                            }));
+                        } catch (e) { /* ignore quota errors */ }
 
-                        let maxStaffAllowed = 3;
-                        if (currentShopTier === 'standard') maxStaffAllowed = 5;
-                        if (currentShopTier === 'premium') maxStaffAllowed = 999;
-
-                        const staffProfiles = shopData.staffProfiles || { "Staff 1": "1111", "Admin": "9999" };
-                        let staffHTML = '';
-
-                        const styleVariants = [
-                            "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200",
-                            "bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200",
-                            "bg-green-100 text-green-800 border-green-200 hover:bg-green-200",
-                            "bg-pink-100 text-pink-800 border-pink-200 hover:bg-pink-200"
-                        ];
-
-                        let colorIndex = 0;
-                        let staffCount = 0;
-
-                        for (const [name, pin] of Object.entries(staffProfiles)) {
-                            if (name.toUpperCase() === 'ADMIN') {
-                                if (currentShopTier !== 'basic') {
-                                    staffHTML += `<button onclick="loginWithPin('${name}', '${pin}')" class="w-full bg-gray-200 text-gray-800 font-bold text-xl py-4 rounded-lg hover:bg-gray-300 transition mt-4 border-2 border-gray-300 order-last">⚙️ ${name} Login</button>`;
-                                }
-                            } else {
-                                if (staffCount < maxStaffAllowed) {
-                                    const style = styleVariants[colorIndex % styleVariants.length];
-                                    staffHTML += `<button onclick="loginWithPin('${name}', '${pin}')" class="w-full ${style} font-bold text-2xl py-6 rounded-lg transition border-2">🧑‍💻 Log in as ${name}</button>`;
-                                    colorIndex++;
-                                    staffCount++;
-                                }
-                            }
-                        }
-
-                        document.getElementById('staff-buttons-container').innerHTML = staffHTML;
-                        console.log(`Workspace Loaded: ${currentShopTier.toUpperCase()} Tier. Staff allowed: ${maxStaffAllowed}`);
+                        renderStaffButtons(shopData);
                     } else {
                         uiAlert("System Error: Unregistered Workspace ID.", 'Error');
                     }
                 }).catch(error => console.error("Failed to authenticate workspace:", error));
+            }
+
+            // Renders the staff login buttons from a shop data object (cached or fresh).
+            function renderStaffButtons(shopData) {
+                currentShopTier = shopData.tier ? shopData.tier.toLowerCase() : 'basic';
+                currentRackLayout = shopData.rackLayout || null;
+                document.title = `${shopData.shopName} - PUDO WMS`;
+
+                let maxStaffAllowed = 3;
+                if (currentShopTier === 'standard') maxStaffAllowed = 5;
+                if (currentShopTier === 'premium') maxStaffAllowed = 999;
+
+                const staffProfiles = shopData.staffProfiles || { "Staff 1": "1111", "Admin": "9999" };
+                let staffHTML = '';
+
+                const styleVariants = [
+                    "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200",
+                    "bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200",
+                    "bg-green-100 text-green-800 border-green-200 hover:bg-green-200",
+                    "bg-pink-100 text-pink-800 border-pink-200 hover:bg-pink-200"
+                ];
+
+                let colorIndex = 0;
+                let staffCount = 0;
+
+                for (const [name, pin] of Object.entries(staffProfiles)) {
+                    if (name.toUpperCase() === 'ADMIN') {
+                        if (currentShopTier !== 'basic') {
+                            staffHTML += `<button onclick="loginWithPin('${name}', '${pin}')" class="w-full bg-gray-200 text-gray-800 font-bold text-xl py-4 rounded-lg hover:bg-gray-300 transition mt-4 border-2 border-gray-300 order-last">⚙️ ${name} Login</button>`;
+                        }
+                    } else {
+                        if (staffCount < maxStaffAllowed) {
+                            const style = styleVariants[colorIndex % styleVariants.length];
+                            staffHTML += `<button onclick="loginWithPin('${name}', '${pin}')" class="w-full ${style} font-bold text-2xl py-6 rounded-lg transition border-2">🧑‍💻 Log in as ${name}</button>`;
+                            colorIndex++;
+                            staffCount++;
+                        }
+                    }
+                }
+
+                document.getElementById('staff-buttons-container').innerHTML = staffHTML;
+                console.log(`Workspace Loaded: ${currentShopTier.toUpperCase()} Tier. Staff allowed: ${maxStaffAllowed}`);
             }
 
             // --- FIREBASE AUTH MASTER LISTENER ---
