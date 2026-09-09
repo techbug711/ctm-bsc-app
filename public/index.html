@@ -1535,6 +1535,7 @@
             const SCAN_LOG_PRUNE_INTERVAL = 60 * 60 * 1000; // prune at most once per hour
             let scanLogDb = null;
             let lastScanLogPrune = 0;
+            let hasFailedScans = false; // set when a scan fails, cleared when retries exhaust
 
             async function openScanLogDb() {
                 if (scanLogDb) return scanLogDb;
@@ -1760,9 +1761,13 @@
             }
 
             async function retryFailedWrites() {
+                // ⚡ Skip the IndexedDB query entirely when there's nothing to retry.
+                // The flag is set when a scan fails and cleared once retries are exhausted.
+                if (!hasFailedScans) return;
                 const failed = await getFailedScanLogEntries();
-                if (!failed.length) return;
+                if (!failed.length) { hasFailedScans = false; return; }
                 console.log(`🔁 Auto-retrying ${failed.length} failed scan(s)...`);
+                let stillFailed = false;
                 for (const entry of failed) {
                     // 🚫 NEVER auto-retry validation failures — only network/transient errors.
                     // Invalid-format scans (e.g. MY-prefix) must stay rejected, not silently
@@ -1791,9 +1796,11 @@
                         await updateScanLogEntry(entry.id, { stage: 'success', error: null, time: Date.now(), retryNote: 'Auto-retry succeeded' });
                         showToast(`✅ Auto-retry saved ${entry.awb}`, 'success');
                     } catch (e) {
+                        stillFailed = true;
                         await updateScanLogEntry(entry.id, { error: e.code || e.message, retryNote: `Retry failed at ${new Date().toLocaleTimeString()}` });
                     }
                 }
+                hasFailedScans = stillFailed;
             }
 
             setInterval(retryFailedWrites, 10000);
@@ -2219,6 +2226,7 @@
                     logEntry.stage = 'failed';
                     logEntry.error = errMsg;
                     logEntry.firebaseWriteMs = Math.round(performance.now() - startTime);
+                    hasFailedScans = true; // wake the auto-retry poll
                     await addScanLogEntry(logEntry);
                     showToast(`⚠️ ${awb} not saved. Auto-retry running.`, 'error');
                     awbInput.value = '';
