@@ -2836,6 +2836,29 @@
             // --- IN-APP DIALOG SYSTEM (replaces native alert/confirm/prompt) ---
             // Native dialogs are silently disabled in standalone PWAs on Android Chrome,
             // so every alert()/confirm()/prompt() must go through these instead.
+            // Keyboard support: Enter = OK, Escape = Cancel (when a cancel button is shown).
+            let uiDialogResolve = null;
+            let uiDialogHasCancel = false;
+
+            function uiDialogClose(result) {
+                document.getElementById('uiDialogOverlay').classList.add('hidden');
+                const resolve = uiDialogResolve;
+                uiDialogResolve = null;
+                if (resolve) resolve(result);
+            }
+
+            document.addEventListener('keydown', (e) => {
+                const overlay = document.getElementById('uiDialogOverlay');
+                if (!overlay || overlay.classList.contains('hidden')) return;
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById('uiDialogOk').click();
+                } else if (e.key === 'Escape' && uiDialogHasCancel) {
+                    e.preventDefault();
+                    document.getElementById('uiDialogCancel').click();
+                }
+            });
+
             function uiAlert(message, title) {
                 return new Promise((resolve) => {
                     const overlay = document.getElementById('uiDialogOverlay');
@@ -2843,10 +2866,13 @@
                     document.getElementById('uiDialogBody').textContent = message;
                     document.getElementById('uiDialogInputWrap').classList.add('hidden');
                     document.getElementById('uiDialogCancel').classList.add('hidden');
+                    uiDialogHasCancel = false;
                     const ok = document.getElementById('uiDialogOk');
                     ok.textContent = 'OK';
-                    ok.onclick = () => { overlay.classList.add('hidden'); resolve(); };
+                    uiDialogResolve = () => resolve();
+                    ok.onclick = () => uiDialogClose();
                     overlay.classList.remove('hidden');
+                    ok.focus();
                 });
             }
 
@@ -2857,12 +2883,15 @@
                     document.getElementById('uiDialogBody').textContent = message;
                     document.getElementById('uiDialogInputWrap').classList.add('hidden');
                     document.getElementById('uiDialogCancel').classList.remove('hidden');
+                    uiDialogHasCancel = true;
                     const ok = document.getElementById('uiDialogOk');
                     const cancel = document.getElementById('uiDialogCancel');
                     ok.textContent = 'OK';
-                    ok.onclick = () => { overlay.classList.add('hidden'); resolve(true); };
-                    cancel.onclick = () => { overlay.classList.add('hidden'); resolve(false); };
+                    uiDialogResolve = (v) => resolve(v);
+                    ok.onclick = () => uiDialogClose(true);
+                    cancel.onclick = () => uiDialogClose(false);
                     overlay.classList.remove('hidden');
+                    ok.focus();
                 });
             }
 
@@ -2876,11 +2905,13 @@
                     const input = document.getElementById('uiDialogInput');
                     input.value = '';
                     document.getElementById('uiDialogCancel').classList.remove('hidden');
+                    uiDialogHasCancel = true;
                     const ok = document.getElementById('uiDialogOk');
                     const cancel = document.getElementById('uiDialogCancel');
                     ok.textContent = 'OK';
-                    ok.onclick = () => { const v = input.value; overlay.classList.add('hidden'); resolve(v); };
-                    cancel.onclick = () => { overlay.classList.add('hidden'); resolve(null); };
+                    uiDialogResolve = (v) => resolve(v);
+                    ok.onclick = () => uiDialogClose(input.value);
+                    cancel.onclick = () => uiDialogClose(null);
                     overlay.classList.remove('hidden');
                     setTimeout(() => input.focus(), 50);
                 });
