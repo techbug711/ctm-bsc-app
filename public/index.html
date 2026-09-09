@@ -705,7 +705,14 @@
                 const container = document.getElementById('slotMapContainer');
                 if (btn) { btn.innerHTML = '⏳ Syncing...'; btn.disabled = true; }
                 try {
-                    const snapshot = await shopDB.collection('active_parcels').get();
+                    // ⚡ INSTANT RENDER: if we already have warm data (from the IN/OUT/STOCK
+                    // listener), paint the slot map immediately instead of waiting on a full
+                    // 600-doc fetch. Then reconcile with a fresh server read in the background.
+                    if (allInventoryData && allInventoryData.length > 0) {
+                        renderSlotMap(allInventoryData);
+                    }
+
+                    const snapshot = await shopDB.collection('active_parcels').get({ source: 'server' });
                     const parcels = [];
                     snapshot.forEach(doc => {
                         const data = doc.data();
