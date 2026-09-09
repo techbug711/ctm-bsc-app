@@ -593,6 +593,9 @@
                     rebuildAwbSet(parcels);
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
                     if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
+                    // 🔄 Refresh the inbound slot count now that data has loaded, so the
+                    // "X of Y currently in slot" display is correct after a fresh login.
+                    refreshSlotData();
                 }).catch((error) => console.error("Initial fetch error:", error));
             }
 
@@ -614,6 +617,8 @@
                     rebuildAwbSet(parcels);
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
                     if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
+                    // 🔄 Keep the inbound slot count in sync with live data.
+                    refreshSlotData();
                 }, (error) => console.error("Firebase Sync Error: ", error));
             }
 
