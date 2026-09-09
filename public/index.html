@@ -1532,7 +1532,9 @@
             const SCAN_LOG_DB_NAME = 'wmsScanLog';
             const SCAN_LOG_STORE = 'scanAttempts';
             const SCAN_LOG_VERSION = 1;
+            const SCAN_LOG_PRUNE_INTERVAL = 60 * 60 * 1000; // prune at most once per hour
             let scanLogDb = null;
+            let lastScanLogPrune = 0;
 
             async function openScanLogDb() {
                 if (scanLogDb) return scanLogDb;
@@ -1562,7 +1564,14 @@
                         req.onsuccess = () => resolve();
                         req.onerror = () => reject(req.error);
                     });
-                    await pruneScanLog();
+                    // ⚡ Prune at most once per hour (not on every scan). Entries only become
+                    // "too old" once a day, so a full IndexedDB walk on every inbound scan is
+                    // wasted work during busy sessions.
+                    const now = Date.now();
+                    if (now - lastScanLogPrune >= SCAN_LOG_PRUNE_INTERVAL) {
+                        lastScanLogPrune = now;
+                        await pruneScanLog();
+                    }
                 } catch (e) {
                     console.error('Failed to write scan log:', e);
                 }
