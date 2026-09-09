@@ -411,13 +411,18 @@
             };
             firebase.initializeApp(firebaseConfig);
             const db = firebase.firestore();
-            // 🔒 OFFLINE PERSISTENCE DISABLED (2026-09-09):
-            // Previously enabled, but on flaky shop Wi-Fi a batch.commit() could be
-            // queued locally and resolve "success" without ever reaching the server —
-            // causing parcels to silently reappear in active_parcels after a "collect".
-            // With persistence off, every write either reaches Firestore or throws a
-            // visible error. Accuracy > offline tolerance for a WMS.
-            db.settings({ ignoreUndefinedProperties: true });
+            // ⚡ OFFLINE PERSISTENCE ENABLED (re-enabled 2026-09-09):
+            // Keeps search reads fast (served from local cache). Collect writes are
+            // made honest via a server-verified transaction in markCollected(), so
+            // persistence no longer causes silent "queued but never saved" failures.
+            db.enablePersistence()
+                .catch((err) => {
+                    if (err.code == 'failed-precondition') {
+                        console.warn("Multiple windows open, persistence failed.");
+                    } else if (err.code == 'unimplemented') {
+                        console.warn("Browser doesn't support offline persistence.");
+                    }
+                });
 
             // --- SAAS GATEKEEPER & FEATURE GATING ---
             let currentShopId = null;
@@ -2523,10 +2528,23 @@
                     data.collectedAt = Date.now();
                     data.collectedBy = currentUser || 'Admin';
 
-                    const batch = db.batch();
-                    batch.set(shopDB.collection("collected_parcels").doc(awbId), data);
-                    batch.delete(shopDB.collection("active_parcels").doc(awbId));
-                    await batch.commit();
+                    // 🔒 SERVER-VERIFIED COLLECT (transaction):
+                    // A transaction requires a live network round-trip, so even with
+                    // offline persistence enabled, this either commits to the server or
+                    // throws a visible error — no silent "queued but never saved" state.
+                    // It also re-reads the doc, so a parcel already collected by another
+                    // device is caught instead of being double-written.
+                    await db.runTransaction(async (tx) => {
+                        const snap = await tx.get(shopDB.collection("active_parcels").doc(awbId));
+                        if (!snap.exists) {
+                            throw new Error("Parcel already collected on another device.");
+                        }
+                        const fresh = snap.data();
+                        fresh.collectedAt = Date.now();
+                        fresh.collectedBy = currentUser || 'Admin';
+                        tx.set(shopDB.collection("collected_parcels").doc(awbId), fresh);
+                        tx.delete(shopDB.collection("active_parcels").doc(awbId));
+                    });
 
                     if (card) card.remove();
                     currentDisplayedIds = currentDisplayedIds.filter(id => id !== awbId);
