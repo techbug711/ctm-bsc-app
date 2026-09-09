@@ -2500,6 +2500,12 @@
             }
 
             async function markCollected(awbId) {
+                // ⚡ INSTANT FEEDBACK: disable the button + show a spinner the moment
+                // it's tapped, so staff never see a frozen-looking button while the
+                // Firestore write is in flight.
+                const card = document.getElementById(`card-${awbId}`);
+                const btn = card ? card.querySelector('button') : null;
+                if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Collecting...'; }
                 try {
                     let data = currentDisplayedData[awbId];
 
@@ -2510,6 +2516,7 @@
                         const snap = await shopDB.collection("active_parcels").doc(awbId).get();
                         if (!snap.exists) {
                             alert("Parcel not found — it may have already been collected. Refresh and try again.");
+                            if (btn) { btn.disabled = false; btn.innerHTML = 'Collect'; }
                             return;
                         }
                         data = snap.data();
@@ -2523,7 +2530,6 @@
                     batch.delete(shopDB.collection("active_parcels").doc(awbId));
                     await batch.commit();
 
-                    const card = document.getElementById(`card-${awbId}`);
                     if (card) card.remove();
                     currentDisplayedIds = currentDisplayedIds.filter(id => id !== awbId);
 
@@ -2558,6 +2564,7 @@
                     }
                 } catch (error) {
                     alert("Error updating database: " + error.message);
+                    if (btn) { btn.disabled = false; btn.innerHTML = 'Collect'; }
                 }
             }
 
