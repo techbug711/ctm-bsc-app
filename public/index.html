@@ -2732,15 +2732,25 @@
                     // so it either commits to the server or throws a visible error — no silent
                     // queueing under offline persistence. Also re-reads each doc so a parcel
                     // already collected on another device is caught instead of failing the batch.
+                    // NOTE: Firestore requires ALL reads before ANY writes in a transaction,
+                    // so we do two passes — read every doc first, then write.
                     await db.runTransaction(async (tx) => {
-                        for (const id of docIds) {
-                            const docRef = shopDB.collection("active_parcels").doc(id);
-                            const snap = await tx.get(docRef);
-                            if (!snap.exists) {
-                                throw new Error(`Parcel ${id} is no longer on the shelf (already collected).`);
-                            }
-                            tx.update(docRef, { location: destinationRack });
+                        const refs = docIds.map(id => shopDB.collection("active_parcels").doc(id));
+                        // PASS 1: read all docs
+                        const snaps = [];
+                        for (const docRef of refs) {
+                            snaps.push(await tx.get(docRef));
                         }
+                        // Validate all exist before writing
+                        snaps.forEach((snap, i) => {
+                            if (!snap.exists) {
+                                throw new Error(`Parcel ${docIds[i]} is no longer on the shelf (already collected).`);
+                            }
+                        });
+                        // PASS 2: write all
+                        refs.forEach(docRef => {
+                            tx.update(docRef, { location: destinationRack });
+                        });
                     });
 
                     // Refresh local cache from Firestore so the Multi tab (no listener) re-renders fresh.
