@@ -2753,8 +2753,17 @@
                         });
                     });
 
-                    // Refresh local cache from Firestore so the Multi tab (no listener) re-renders fresh.
-                    const freshSnap = await shopDB.collection("active_parcels").get();
+                    // ⚡ OPTIMISTIC LOCAL UPDATE: reflect the move in the in-memory list
+                    // immediately, so the Multi tab re-renders correctly without waiting on
+                    // a (possibly stale-cached) re-read. Then force a server read to reconcile.
+                    const movedSet = new Set(docIds);
+                    allInventoryData.forEach(p => {
+                        const pid = p.id || p.full_awb;
+                        if (movedSet.has(pid)) p.location = destinationRack;
+                    });
+
+                    // Force a server read (bypass offline cache) to reconcile with truth.
+                    const freshSnap = await shopDB.collection("active_parcels").get({ source: 'server' });
                     allInventoryData = freshSnap.docs.map(d => ({ id: d.id, ...d.data() }))
                         .sort((a, b) => {
                             const locA = a.location || "UNKNOWN";
