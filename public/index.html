@@ -2047,7 +2047,24 @@
                 }
             });
 
-            slotCapacity.addEventListener('change', refreshSlotData);
+            slotCapacity.addEventListener('change', async function () {
+                refreshSlotData();
+                // If lowering the capacity makes the current slot full, auto-advance
+                // immediately (restores pre-regression behavior). Guarded to the `change`
+                // event only, so it never double-fires with the scan trigger.
+                const assignedLocation = getAssignedLocation();
+                let itemsNow = 0;
+                try {
+                    const slotSnap = await shopDB.collection('active_parcels')
+                        .where('location', '==', assignedLocation).get();
+                    itemsNow = slotSnap.size;
+                } catch (e) {
+                    itemsNow = allInventoryData.filter(p => p.location === assignedLocation).length;
+                }
+                if (itemsNow >= parseInt(slotCapacity.value)) {
+                    advanceToNextSlot();
+                }
+            });
 
             function manageFocusState(inputElement) {
                 if (isCameraActive) inputElement.blur();
@@ -2207,10 +2224,19 @@
                     }
                     awbSet.add(awb);
 
-                    // 📊 SNAPSHOT-DERIVED SLOT COUNT: recompute from the shared listener data
-                    // instead of a local ++, so multiple devices stay in sync and never overfill.
+                    // 📊 AUTHORITATIVE SLOT COUNT: read the true count from Firestore so the
+                    // advance fires at exactly the capacity number, regardless of snapshot
+                    // staleness or how many devices are scanning concurrently.
                     refreshSlotData();
-                    const itemsNow = allInventoryData.filter(p => p.location === assignedLocation).length;
+                    let itemsNow = 0;
+                    try {
+                        const slotSnap = await shopDB.collection('active_parcels')
+                            .where('location', '==', assignedLocation).get();
+                        itemsNow = slotSnap.size;
+                    } catch (e) {
+                        // Fall back to the local snapshot count if the read fails.
+                        itemsNow = allInventoryData.filter(p => p.location === assignedLocation).length;
+                    }
                     if (itemsNow >= parseInt(slotCapacity.value)) {
                         playSlotFullChime();
                         advanceToNextSlot();
