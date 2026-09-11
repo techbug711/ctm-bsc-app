@@ -2540,6 +2540,19 @@
                     return;
                 }
 
+                // 🚶 SORT BY LOCATION — natural walking order (rack → level → slot)
+                parcels.sort((a, b) => {
+                    const locA = (a.location || 'ZZZ-999-999').toUpperCase();
+                    const locB = (b.location || 'ZZZ-999-999').toUpperCase();
+                    const pa = locA.match(/^([A-Z]+)-(\d+)-(\d+)$/);
+                    const pb = locB.match(/^([A-Z]+)-(\d+)-(\d+)$/);
+                    const ra = pa ? pa[1] : locA, la = pa ? +pa[2] : 999, sa = pa ? +pa[3] : 999;
+                    const rb = pb ? pb[1] : locB, lb = pb ? +pb[2] : 999, sb = pb ? +pb[3] : 999;
+                    if (ra !== rb) return ra.localeCompare(rb);
+                    if (la !== lb) return la - lb;
+                    return sa - sb;
+                });
+
                 parcels.forEach(data => {
                     const docId = data.id || data.full_awb;
                     const awb = (data.full_awb || '').toUpperCase();
