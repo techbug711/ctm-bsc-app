@@ -351,9 +351,12 @@
             <div id="section-slots" class="p-4 md:p-8 hidden">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold text-gray-800">🗄️ Slot Occupancy</h2>
-                    <button id="syncSlotsBtn" onclick="refreshSlotMap()"
-                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-sm">🔄 Sync</button>
+                    <div class="flex gap-2">
+                        <button onclick="runRebalance()" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-sm">⚖️ Rebalance</button>
+                        <button id="syncSlotsBtn" onclick="refreshSlotMap()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-sm">🔄 Sync</button>
+                    </div>
                 </div>
+                <div id="rebalanceReport" class="hidden mb-6"></div>
                 <div id="slotMapContainer" class="space-y-4">
                     <p class="text-gray-500 italic text-center">Loading slot map...</p>
                 </div>
@@ -767,6 +770,195 @@
                     if (btn) { btn.innerHTML = '❌ Failed'; }
                 } finally {
                     if (btn) setTimeout(() => { btn.innerHTML = '🔄 Sync'; btn.disabled = false; }, 1500);
+                }
+            }
+
+            // --- REBALANCE ENGINE ---
+            // Analyzes slot load distribution within configured ranges and suggests
+            // moves to even out overcrowded/underloaded slots. Newest parcels first.
+            const REBALANCE_RANGES = [
+                { name: 'Range A-1 → B-1', slots: (() => {
+                    const s = [];
+                    // A-1-1 to A-1-10 (or whatever maxSlots is)
+                    for (let i = 1; i <= 10; i++) s.push(`A-1-${i}`);
+                    // B-1-1 to B-1-10
+                    for (let i = 1; i <= 10; i++) s.push(`B-1-${i}`);
+                    return s;
+                })()},
+                { name: 'Range H-2', slots: (() => {
+                    const s = [];
+                    for (let i = 1; i <= 16; i++) s.push(`H-2-${i}`);
+                    return s;
+                })()}
+            ];
+
+            async function runRebalance() {
+                const reportDiv = document.getElementById('rebalanceReport');
+                reportDiv.innerHTML = '<p class="text-center text-blue-600 font-bold text-xl animate-pulse">⏳ Analyzing slot loads...</p>';
+                reportDiv.classList.remove('hidden');
+
+                // Use warm data or fetch fresh
+                let parcels = allInventoryData && allInventoryData.length > 0
+                    ? allInventoryData
+                    : [];
+                if (parcels.length === 0) {
+                    try {
+                        const snap = await shopDB.collection('active_parcels').get({ source: 'server' });
+                        parcels = [];
+                        snap.forEach(doc => parcels.push({ id: doc.id, ...doc.data() }));
+                    } catch (e) {
+                        reportDiv.innerHTML = '<p class="text-red-600 font-bold text-center">Failed to load data.</p>';
+                        return;
+                    }
+                }
+
+                let html = '';
+                let totalSuggestions = 0;
+
+                REBALANCE_RANGES.forEach(range => {
+                    const rangeParcels = parcels.filter(p => range.slots.includes((p.location || '').toUpperCase().trim()));
+
+                    // Count per slot
+                    const slotCounts = {};
+                    const slotParcels = {};
+                    range.slots.forEach(loc => { slotCounts[loc] = 0; slotParcels[loc] = []; });
+                    rangeParcels.forEach(p => {
+                        const loc = (p.location || '').toUpperCase().trim();
+                        if (slotCounts[loc] !== undefined) {
+                            slotCounts[loc]++;
+                            slotParcels[loc].push(p);
+                        }
+                    });
+
+                    const occupiedSlots = Object.values(slotCounts).filter(c => c > 0);
+                    if (occupiedSlots.length === 0) {
+                        html += `<div class="bg-gray-50 border-2 border-gray-200 rounded-lg p-4">
+                            <h3 class="font-black text-gray-700 text-lg">${range.name}</h3>
+                            <p class="text-gray-500 font-bold mt-2">No parcels in this range.</p>
+                        </div>`;
+                        return;
+                    }
+
+                    const total = occupiedSlots.reduce((a, b) => a + b, 0);
+                    const avg = total / range.slots.length; // average across ALL slots (incl. empty)
+                    const threshold = Math.max(3, Math.round(avg * 0.4)); // ~40% above/below avg, min 3
+
+                    // Identify overloaded and underloaded
+                    const overloaded = [];
+                    const underloaded = [];
+                    range.slots.forEach(loc => {
+                        const count = slotCounts[loc];
+                        if (count > avg + threshold) overloaded.push({ loc, count });
+                        else if (count < avg - threshold) underloaded.push({ loc, count });
+                    });
+
+                    // Sort overloaded desc, underloaded asc
+                    overloaded.sort((a, b) => b.count - a.count);
+                    underloaded.sort((a, b) => a.count - b.count);
+
+                    // Generate move suggestions
+                    const suggestions = [];
+                    const simCounts = { ...slotCounts };
+
+                    overloaded.forEach(src => {
+                        while (simCounts[src.loc] > avg + 1 && underloaded.some(dst => simCounts[dst.loc] < avg - 1)) {
+                            // Find best destination (most underloaded)
+                            const dst = underloaded
+                                .filter(d => simCounts[d.loc] < avg)
+                                .sort((a, b) => simCounts[a.loc] - simCounts[b.loc])[0];
+                            if (!dst) break;
+
+                            // Pick newest parcel from source
+                            const candidates = (slotParcels[src.loc] || [])
+                                .filter(p => !p._suggested)
+                                .sort((a, b) => {
+                                    const ta = a.inboundAt || a.timestamp || 0;
+                                    const tb = b.inboundAt || b.timestamp || 0;
+                                    return tb - ta; // newest first
+                                });
+                            if (candidates.length === 0) break;
+
+                            const parcel = candidates[0];
+                            parcel._suggested = true;
+                            suggestions.push({
+                                awb: parcel.id || parcel.full_awb,
+                                name: parcel.customerName || '',
+                                from: src.loc,
+                                to: dst.loc
+                            });
+                            simCounts[src.loc]--;
+                            simCounts[dst.loc]++;
+                        }
+                    });
+
+                    // Render range report
+                    html += `<div class="bg-white border-2 border-purple-300 rounded-lg p-4 shadow-sm">
+                        <h3 class="font-black text-purple-900 text-lg">⚖️ ${range.name}</h3>
+                        <p class="text-sm font-bold text-gray-500 mt-1">Avg: ${avg.toFixed(1)} parcels/slot &bull; Threshold: ±${threshold}</p>
+                        <div class="grid grid-cols-2 gap-2 mt-3">`;
+
+                    range.slots.forEach(loc => {
+                        const count = slotCounts[loc];
+                        let color = 'text-gray-700';
+                        let bg = 'bg-gray-50';
+                        if (count > avg + threshold) { color = 'text-red-700'; bg = 'bg-red-50'; }
+                        else if (count < avg - threshold) { color = 'text-green-700'; bg = 'bg-green-50'; }
+                        html += `<div class="${bg} rounded px-2 py-1 text-sm font-bold ${color}">${loc}: <span class="text-lg">${count}</span></div>`;
+                    });
+
+                    html += `</div>`;
+
+                    if (suggestions.length > 0) {
+                        totalSuggestions += suggestions.length;
+                        html += `<div class="mt-4 border-t border-gray-200 pt-3">
+                            <p class="font-black text-blue-900 mb-2">💡 Suggested moves (${suggestions.length}):</p>
+                            <div class="space-y-2">`;
+                        suggestions.forEach((s, idx) => {
+                            html += `<div class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-bold text-gray-600 truncate">${s.name || s.awb}</p>
+                                    <p class="text-xs text-gray-400">${s.awb}</p>
+                                    <p class="font-black text-blue-800 mt-1">${s.from} → ${s.to}</p>
+                                </div>
+                                <button onclick="executeRebalanceMove('${s.awb}', '${s.to}', this)"
+                                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-sm ml-3 flex-shrink-0">
+                                    Move
+                                </button>
+                            </div>`;
+                        });
+                        html += `</div></div>`;
+                    } else {
+                        html += `<p class="text-green-700 font-bold mt-3">✅ This range is well balanced!</p>`;
+                    }
+                    html += `</div>`;
+                });
+
+                if (totalSuggestions === 0) {
+                    html += `<div class="bg-green-50 border-2 border-green-300 rounded-lg p-6 text-center">
+                        <p class="text-2xl font-black text-green-800">✅ All ranges are well balanced!</p>
+                        <p class="text-green-600 font-bold mt-2">No moves needed.</p>
+                    </div>`;
+                }
+
+                reportDiv.innerHTML = html;
+            }
+
+            async function executeRebalanceMove(awb, targetLoc, btn) {
+                btn.disabled = true;
+                btn.innerHTML = '⏳';
+                try {
+                    await shopDB.collection('active_parcels').doc(awb).update({ location: targetLoc });
+                    // Update local data
+                    const local = allInventoryData.find(p => (p.id || p.full_awb) === awb);
+                    if (local) local.location = targetLoc;
+                    btn.innerHTML = '✅';
+                    btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                    btn.classList.add('bg-green-600');
+                    setTimeout(() => btn.closest('.flex.items-center').remove(), 800);
+                } catch (e) {
+                    btn.innerHTML = '❌';
+                    btn.disabled = false;
+                    setTimeout(() => { btn.innerHTML = 'Move'; }, 2000);
                 }
             }
 
