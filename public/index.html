@@ -2599,12 +2599,10 @@
                     const platformBadge = isYoyi ? '<span class="select-none bg-green-200 text-green-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">YOYI</span>' : '<span class="select-none bg-orange-200 text-orange-800 text-xs px-2 py-1 rounded font-black ml-2 align-top">SPX</span>';
 
                     let displayAwb = awb;
-                    if (matchedQuery && awb.includes(matchedQuery.toUpperCase().trim())) {
-                        let qToken = matchedQuery.toUpperCase().trim();
-                        let lastIdx = awb.lastIndexOf(qToken);
-                        if (lastIdx !== -1) {
-                            displayAwb = awb.substring(0, lastIdx) + `<span class="text-black font-black text-lg bg-yellow-200 px-1 rounded shadow-sm border border-yellow-400">` + awb.substring(lastIdx, lastIdx + qToken.length) + `</span>` + awb.substring(lastIdx + qToken.length);
-                        }
+                    // Highlight the LAST 6 digits for visual matching
+                    const last6Start = awb.length - 6;
+                    if (last6Start > 0) {
+                        displayAwb = awb.substring(0, last6Start) + `<span class="text-black font-black text-lg bg-yellow-300 px-1 rounded shadow-sm border-2 border-yellow-500">` + awb.substring(last6Start) + `</span>`;
                     }
 
                     let relatedBadge = (!directMatches.has(data)) ? `<span class="select-none bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm border border-blue-200 shrink-0 uppercase">Auto-Found</span>` : '';
