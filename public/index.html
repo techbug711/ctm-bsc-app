@@ -2396,7 +2396,7 @@
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     const value = e.target.value.toUpperCase().trim();
-                    if (value.length < 4) { uiAlert("Please enter at least 4 digits.", 'Search'); return; }
+                    if (value.length < 3) { uiAlert("Please enter at least 3 characters.", 'Search'); return; }
 
                     if (!searchQueries.includes(value)) {
                         searchQueries.push(value);
@@ -2505,15 +2505,18 @@
                     const cleanQuery = q.trim().toUpperCase();
                     const len = cleanQuery.length;
 
-                    if (len === 4) promises.push(shopDB.collection('active_parcels').where('last4', '==', cleanQuery).get());
-                    if (len === 5) promises.push(shopDB.collection('active_parcels').where('last5', '==', cleanQuery).get());
-                    if (len === 6) promises.push(shopDB.collection('active_parcels').where('last6', '==', cleanQuery).get());
+                    // Only do digit-based queries if the query is numeric
+                    if (/^\d+$/.test(cleanQuery)) {
+                        if (len === 4) promises.push(shopDB.collection('active_parcels').where('last4', '==', cleanQuery).get());
+                        if (len === 5) promises.push(shopDB.collection('active_parcels').where('last5', '==', cleanQuery).get());
+                        if (len === 6) promises.push(shopDB.collection('active_parcels').where('last6', '==', cleanQuery).get());
 
-                    // Full AWB exact match
-                    promises.push(shopDB.collection('active_parcels').where('full_awb', '==', cleanQuery).get());
-                    // Prefix/range match for full barcodes
-                    if (cleanQuery.startsWith('680') || cleanQuery.startsWith('SPXMY')) {
-                        promises.push(shopDB.collection('active_parcels').where('full_awb', '>=', cleanQuery).where('full_awb', '<=', cleanQuery + '\uf8ff').get());
+                        // Full AWB exact match
+                        promises.push(shopDB.collection('active_parcels').where('full_awb', '==', cleanQuery).get());
+                        // Prefix/range match for full barcodes
+                        if (cleanQuery.startsWith('680') || cleanQuery.startsWith('SPXMY')) {
+                            promises.push(shopDB.collection('active_parcels').where('full_awb', '>=', cleanQuery).where('full_awb', '<=', cleanQuery + '\uf8ff').get());
+                        }
                     }
                 }
 
@@ -2552,6 +2555,24 @@
                     if (la !== lb) return la - lb;
                     return sa - sb;
                 });
+
+                // 📊 MULTI-PARCEL SUMMARY HEADER
+                const locationSummary = {};
+                parcels.forEach(p => {
+                    const loc = p.location || 'UNKNOWN';
+                    if (!locationSummary[loc]) locationSummary[loc] = 0;
+                    locationSummary[loc]++;
+                });
+                const summaryEntries = Object.entries(locationSummary).sort();
+                const summaryText = summaryEntries.map(([loc, count]) => `${count}× ${loc}`).join(', ');
+
+                let resultsHTML = '';
+                if (parcels.length > 1) {
+                    resultsHTML += `<div class="bg-blue-50 border-2 border-blue-300 p-4 rounded-lg mb-4 shadow-sm">
+                        <p class="text-lg font-black text-blue-900">📦 ${parcels.length} parcels found</p>
+                        <p class="text-sm font-bold text-blue-700 mt-1">${summaryText}</p>
+                    </div>`;
+                }
 
                 parcels.forEach(data => {
                     const docId = data.id || data.full_awb;
@@ -2608,6 +2629,10 @@
                     const cardBorder = isRts ? 'border-red-500 border-4' : 'border-gray-300 border-2';
                     const cardBg = isRts ? 'bg-red-50' : 'bg-gray-50';
 
+                    // 🔍 HUGE LAST-4 for visual matching in crowded slots
+                    const last4 = awb.slice(-4);
+                    const last4Display = `<span class="bg-yellow-300 text-black text-4xl md:text-5xl font-black px-3 py-1 rounded-lg border-2 border-yellow-500 shadow-md">${last4}</span>`;
+
                     resultsHTML += `
                     <div class="${cardBg} ${cardBorder} p-4 md:p-6 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4" id="card-${docId}">
                         <div class="w-full overflow-hidden">
@@ -2616,7 +2641,13 @@
                             <p class="text-sm text-gray-500 font-bold uppercase tracking-wider mt-1 break-words">
                                 Tracking: <span class="text-gray-900 font-black text-lg select-all break-all">${displayAwb}</span>${platformBadge}
                             </p>
-                            <p class="text-3xl md:text-4xl font-black text-blue-700 mt-2">${data.location || '-'}</p>
+                            <div class="flex items-center gap-4 mt-2">
+                                <p class="text-3xl md:text-4xl font-black text-blue-700">${data.location || '-'}</p>
+                                <div class="flex flex-col items-center">
+                                    <span class="text-xs text-gray-400 font-bold uppercase">Last 4</span>
+                                    ${last4Display}
+                                </div>
+                            </div>
                         </div>
                         <button onclick="markCollected('${docId}')" class="bg-blue-600 text-white px-6 md:px-8 py-4 rounded-lg text-xl md:text-2xl font-bold hover:bg-blue-700 shadow-md transition w-full md:w-auto flex-shrink-0">
                             Collect
