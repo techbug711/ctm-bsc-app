@@ -1950,44 +1950,66 @@
 
             // --- ZONE-AWARE PROGRESSION ENGINE ---
             function advanceToNextSlot() {
-                const r = rackPrefix.value.toUpperCase();
-                const l = parseInt(levelCounter.value);
-                const s = parseInt(slotCounter.value);
+                // Safety limit: don't loop more than 200 slots (prevents infinite loop
+                // if every slot in the zone is full).
+                let hops = 0;
+                while (hops < 200) {
+                    hops++;
+                    const r = rackPrefix.value.toUpperCase();
+                    const l = parseInt(levelCounter.value);
+                    const s = parseInt(slotCounter.value);
 
-                const zone = getZoneForLocation(r, l);
+                    const zone = getZoneForLocation(r, l);
 
-                if (!zone || !Array.isArray(zone.segments) || zone.segments.length === 0) {
-                    // No zone config — simple slot increment fallback
-                    slotCounter.value = s + 1;
+                    if (!zone || !Array.isArray(zone.segments) || zone.segments.length === 0) {
+                        // No zone config — simple slot increment fallback
+                        slotCounter.value = s + 1;
+                        applySmartDefaults();
+                        refreshSlotData();
+                        // Check if this new slot is also full
+                        const newLoc = getAssignedLocation();
+                        const newCount = slotCountMap[newLoc] || 0;
+                        if (newCount >= parseInt(slotCapacity.value)) {
+                            continue; // keep advancing
+                        }
+                        return;
+                    }
+
+                    let segIndex = zone.segments.findIndex(seg => seg.rack === r && seg.level === l);
+                    if (segIndex === -1) segIndex = 0;
+
+                    const seg = zone.segments[segIndex];
+                    const cfg = getLevelConfig(seg.rack, seg.level);
+                    const maxSlots = (cfg && cfg.maxSlots) ? cfg.maxSlots : 1;
+
+                    if (s < maxSlots) {
+                        // Next slot within the same segment
+                        slotCounter.value = s + 1;
+                    } else if (segIndex < zone.segments.length - 1) {
+                        // Move to the next segment in this zone
+                        const nextSeg = zone.segments[segIndex + 1];
+                        rackPrefix.value = nextSeg.rack;
+                        levelCounter.value = nextSeg.level;
+                        slotCounter.value = 1;
+                    } else {
+                        // Last slot of the last segment — zone is full, stop
+                        capacityDisplay.innerHTML = `<span class="text-red-600 font-black">ZONE FULL — no more slots in this zone.</span>`;
+                        return;
+                    }
+
                     applySmartDefaults();
                     refreshSlotData();
-                    return;
+
+                    // Check if this new slot is also full — if so, keep advancing
+                    const newLoc = getAssignedLocation();
+                    const newCount = slotCountMap[newLoc] || 0;
+                    if (newCount < parseInt(slotCapacity.value)) {
+                        return; // found an empty slot, stop
+                    }
+                    // else: this slot is also full, loop and advance again
                 }
-
-                let segIndex = zone.segments.findIndex(seg => seg.rack === r && seg.level === l);
-                if (segIndex === -1) segIndex = 0;
-
-                const seg = zone.segments[segIndex];
-                const cfg = getLevelConfig(seg.rack, seg.level);
-                const maxSlots = (cfg && cfg.maxSlots) ? cfg.maxSlots : 1;
-
-                if (s < maxSlots) {
-                    // Next slot within the same segment
-                    slotCounter.value = s + 1;
-                } else if (segIndex < zone.segments.length - 1) {
-                    // Move to the next segment in this zone
-                    const nextSeg = zone.segments[segIndex + 1];
-                    rackPrefix.value = nextSeg.rack;
-                    levelCounter.value = nextSeg.level;
-                    slotCounter.value = 1;
-                } else {
-                    // Last slot of the last segment — zone is full, stop
-                    capacityDisplay.innerHTML = `<span class="text-red-600 font-black">ZONE FULL — no more slots in this zone.</span>`;
-                    return;
-                }
-
-                applySmartDefaults();
-                refreshSlotData();
+                // Hit the safety limit
+                capacityDisplay.innerHTML = `<span class="text-red-600 font-black">⚠️ Could not find empty slot after 200 hops. Check rack layout.</span>`;
             }
 
             async function refreshSlotData() {
