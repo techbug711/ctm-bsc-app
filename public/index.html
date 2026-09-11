@@ -2629,9 +2629,9 @@
                     const cardBorder = isRts ? 'border-red-500 border-4' : 'border-gray-300 border-2';
                     const cardBg = isRts ? 'bg-red-50' : 'bg-gray-50';
 
-                    // 🔍 HUGE LAST-4 for visual matching in crowded slots
-                    const last4 = awb.slice(-4);
-                    const last4Display = `<span class="bg-yellow-300 text-black text-4xl md:text-5xl font-black px-3 py-1 rounded-lg border-2 border-yellow-500 shadow-md">${last4}</span>`;
+                    // 🔍 HUGE LAST-6 for visual matching in crowded slots
+                    const last6 = awb.slice(-6);
+                    const last6Display = `<span class="bg-yellow-300 text-black text-3xl md:text-4xl font-black px-3 py-1 rounded-lg border-2 border-yellow-500 shadow-md">${last6}</span>`;
 
                     resultsHTML += `
                     <div class="${cardBg} ${cardBorder} p-4 md:p-6 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4" id="card-${docId}">
@@ -2644,8 +2644,8 @@
                             <div class="flex items-center gap-4 mt-2">
                                 <p class="text-3xl md:text-4xl font-black text-blue-700">${data.location || '-'}</p>
                                 <div class="flex flex-col items-center">
-                                    <span class="text-xs text-gray-400 font-bold uppercase">Last 4</span>
-                                    ${last4Display}
+                                    <span class="text-xs text-gray-400 font-bold uppercase">Last 6</span>
+                                    ${last6Display}
                                 </div>
                             </div>
                         </div>
