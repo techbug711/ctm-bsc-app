@@ -352,7 +352,7 @@
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold text-gray-800">🗄️ Slot Occupancy</h2>
                     <div class="flex gap-2">
-                        <button onclick="runRebalance()" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-sm">⚖️ Rebalance</button>
+                        <button onclick="runRebalance()" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-sm text-sm">⚖️ Rebalance</button>
                         <button id="syncSlotsBtn" onclick="refreshSlotMap()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition shadow-sm">🔄 Sync</button>
                     </div>
                 </div>
@@ -841,7 +841,7 @@
 
                     const total = occupiedSlots.reduce((a, b) => a + b, 0);
                     const avg = total / range.slots.length; // average across ALL slots (incl. empty)
-                    const threshold = Math.max(3, Math.round(avg * 0.4)); // ~40% above/below avg, min 3
+                    const threshold = 5; // fixed ±5 for tighter spread
 
                     // Identify overloaded and underloaded
                     const overloaded = [];
