@@ -558,6 +558,12 @@
             let currentInventoryFilter = 'ALL';
             let currentInventorySort = 'LOCATION'; // THE NEW STATE
             let allHistoryData = [];
+            
+            // 🎯 AUTHORITATIVE SLOT COUNTER: tracks the true count per location, incremented
+            // immediately on each successful scan. This replaces the race-prone Firestore .get()
+            // query that relied on index propagation (which lagged behind the transaction commit).
+            // Seeded from the initial fetch and kept in sync by the onSnapshot listener.
+            let slotCountMap = {};
 
             // --- THE NEW SORT TRIGGER ---
             function setInventorySort(sortMode) {
@@ -591,6 +597,12 @@
                         return locA.localeCompare(locB, undefined, { numeric: true, sensitivity: 'base' });
                     });
                     rebuildAwbSet(parcels);
+                    // 🎯 SEED THE SLOT COUNTER from the initial fetch
+                    slotCountMap = {};
+                    parcels.forEach(p => {
+                        const loc = (p.location || '').toUpperCase().trim();
+                        if (loc) slotCountMap[loc] = (slotCountMap[loc] || 0) + 1;
+                    });
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
                     if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
                     // 🔄 Refresh the inbound slot count now that data has loaded, so the
@@ -615,6 +627,13 @@
                         return locA.localeCompare(locB, undefined, { numeric: true, sensitivity: 'base' });
                     });
                     rebuildAwbSet(parcels);
+                    // 🎯 RECONCILE THE SLOT COUNTER from the snapshot (handles multi-device
+                    // scans, deletions, moves). This is the authoritative source of truth.
+                    slotCountMap = {};
+                    parcels.forEach(p => {
+                        const loc = (p.location || '').toUpperCase().trim();
+                        if (loc) slotCountMap[loc] = (slotCountMap[loc] || 0) + 1;
+                    });
                     if (!document.getElementById('section-inventory').classList.contains('hidden')) loadInventory();
                     if (searchQueries.length > 0 && !document.getElementById('section-outbound').classList.contains('hidden')) executeLocalSearch();
                     // 🔄 Keep the inbound slot count in sync with live data.
@@ -1980,12 +1999,8 @@
                 // Instead of doing a server .get() every scan, we just count the parcels 
                 // that are already synced in our local array! Cost = 0 reads.
 
-                // Defensive check: ensure data is loaded, otherwise default to 0
-                if (allInventoryData && allInventoryData.length > 0) {
-                    currentItemsInSlot = allInventoryData.filter(p => p.location === assignedLocation).length;
-                } else {
-                    currentItemsInSlot = 0;
-                }
+                // 🎯 Use the authoritative slot counter for the display
+                currentItemsInSlot = slotCountMap[assignedLocation] || 0;
 
                 if (currentItemsInSlot >= parseInt(slotCapacity.value)) {
                     capacityDisplay.innerHTML = `<span class="text-red-600 font-black">SLOT FULL (${currentItemsInSlot}/${slotCapacity.value})</span>`;
@@ -2047,20 +2062,13 @@
                 }
             });
 
-            slotCapacity.addEventListener('change', async function () {
+            slotCapacity.addEventListener('change', function () {
                 refreshSlotData();
                 // If lowering the capacity makes the current slot full, auto-advance
                 // immediately (restores pre-regression behavior). Guarded to the `change`
                 // event only, so it never double-fires with the scan trigger.
                 const assignedLocation = getAssignedLocation();
-                let itemsNow = 0;
-                try {
-                    const slotSnap = await shopDB.collection('active_parcels')
-                        .where('location', '==', assignedLocation).get();
-                    itemsNow = slotSnap.size;
-                } catch (e) {
-                    itemsNow = allInventoryData.filter(p => p.location === assignedLocation).length;
-                }
+                const itemsNow = slotCountMap[assignedLocation] || 0;
                 if (itemsNow >= parseInt(slotCapacity.value)) {
                     advanceToNextSlot();
                 }
@@ -2224,19 +2232,12 @@
                     }
                     awbSet.add(awb);
 
-                    // 📊 AUTHORITATIVE SLOT COUNT: read the true count from Firestore so the
-                    // advance fires at exactly the capacity number, regardless of snapshot
-                    // staleness or how many devices are scanning concurrently.
+                    // 🎯 AUTHORITATIVE SLOT COUNT: use the local counter that we just incremented.
+                    // This is race-free — no network query, no index lag, no snapshot staleness.
+                    // The counter was incremented +1 above, right after the transaction committed.
+                    slotCountMap[assignedLocation] = (slotCountMap[assignedLocation] || 0) + 1;
                     refreshSlotData();
-                    let itemsNow = 0;
-                    try {
-                        const slotSnap = await shopDB.collection('active_parcels')
-                            .where('location', '==', assignedLocation).get();
-                        itemsNow = slotSnap.size;
-                    } catch (e) {
-                        // Fall back to the local snapshot count if the read fails.
-                        itemsNow = allInventoryData.filter(p => p.location === assignedLocation).length;
-                    }
+                    const itemsNow = slotCountMap[assignedLocation] || 0;
                     if (itemsNow >= parseInt(slotCapacity.value)) {
                         playSlotFullChime();
                         advanceToNextSlot();
