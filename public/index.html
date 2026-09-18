@@ -41,6 +41,12 @@
             color: white;
             border-color: #3b82f6;
         }
+
+        /* Mask PIN entry without using a real password field, so the browser
+           password manager never offers to save it. */
+        .masked-input {
+            -webkit-text-security: disc;
+        }
     </style>
 </head>
 
@@ -69,15 +75,17 @@
             <h1 class="text-3xl font-black text-blue-700 mb-2">PUDO WMS</h1>
             <p class="text-gray-500 font-bold mb-8">Secure Workspace Authentication</p>
 
-            <input type="email" id="authEmail" placeholder="Workspace Email"
-                class="w-full p-4 mb-4 border-2 border-gray-300 rounded-lg text-lg font-bold focus:border-blue-500 outline-none">
-            <input type="password" id="authPassword" placeholder="Password"
-                class="w-full p-4 mb-6 border-2 border-gray-300 rounded-lg text-lg font-bold focus:border-blue-500 outline-none">
+            <form id="masterAuthForm" onsubmit="loginMasterDevice(event)">
+                <input type="email" id="authEmail" name="username" placeholder="Workspace Email" autocomplete="username"
+                    class="w-full p-4 mb-4 border-2 border-gray-300 rounded-lg text-lg font-bold focus:border-blue-500 outline-none">
+                <input type="password" id="authPassword" name="password" placeholder="Password" autocomplete="current-password"
+                    class="w-full p-4 mb-6 border-2 border-gray-300 rounded-lg text-lg font-bold focus:border-blue-500 outline-none">
 
-            <button onclick="loginMasterDevice()"
-                class="w-full bg-blue-800 text-white font-black py-4 text-xl rounded-lg hover:bg-blue-900 transition shadow-md">
-                🔒 Unlock Workspace
-            </button>
+                <button type="submit"
+                    class="w-full bg-blue-800 text-white font-black py-4 text-xl rounded-lg hover:bg-blue-900 transition shadow-md">
+                    🔒 Unlock Workspace
+                </button>
+            </form>
         </div>
 
         <div id="section-login" class="max-w-md mx-auto bg-white rounded-xl shadow-lg p-8 mt-10 text-center hidden">
@@ -144,23 +152,23 @@
                 <div class="bg-blue-50 border-2 border-blue-200 p-4 rounded-lg mb-6 flex flex-wrap gap-4 items-end">
                     <div class="flex-1 min-w-[80px]">
                         <label class="block text-gray-700 font-bold mb-2">Rack</label>
-                        <input type="text" id="rackPrefix" value="A"
+                        <input type="text" id="rackPrefix" value="A" autocomplete="off" data-1p-ignore data-lpignore="true"
                             class="w-full p-2 text-2xl border border-gray-300 rounded uppercase text-center font-bold"
                             maxlength="2">
                     </div>
                     <div class="flex-1 min-w-[80px]">
                         <label class="block text-gray-700 font-bold mb-2">Level</label>
-                        <input type="number" id="levelCounter" value="1"
+                        <input type="number" id="levelCounter" value="1" autocomplete="off" data-1p-ignore data-lpignore="true"
                             class="w-full p-2 text-2xl border border-gray-300 rounded text-center font-bold">
                     </div>
                     <div class="flex-1 min-w-[80px]">
                         <label class="block text-gray-700 font-bold mb-2">Slot</label>
-                        <input type="number" id="slotCounter" value="1"
+                        <input type="number" id="slotCounter" value="1" autocomplete="off" data-1p-ignore data-lpignore="true"
                             class="w-full p-2 text-2xl border border-gray-300 rounded text-center font-bold">
                     </div>
                     <div class="flex-1 min-w-[100px]">
                         <label class="block text-gray-700 font-bold mb-2 text-blue-700">Max/Slot</label>
-                        <input type="number" id="slotCapacity" value="11"
+                        <input type="number" id="slotCapacity" value="11" autocomplete="off" data-1p-ignore data-lpignore="true"
                             class="w-full p-2 text-2xl border-2 border-blue-300 rounded text-center font-bold text-blue-700">
                     </div>
                 </div>
@@ -202,7 +210,7 @@
                             </button>
                         </div>
                         <div id="scanLogFilter" class="p-3 border-b bg-white">
-                            <input type="text" id="scanLogFilterInput" placeholder="Filter AWB..." oninput="filterScanLog()" class="w-full p-2 border border-gray-300 rounded font-bold uppercase">
+                            <input type="text" id="scanLogFilterInput" placeholder="Filter AWB..." oninput="filterScanLog()" autocomplete="off" data-1p-ignore data-lpignore="true" class="w-full p-2 border border-gray-300 rounded font-bold uppercase">
                         </div>
                         <div id="scanLogContent" class="overflow-y-auto p-4 space-y-2 flex-1 text-sm">
                             <p class="text-gray-500 italic text-center">Loading...</p>
@@ -334,7 +342,7 @@
                     </div>
 
                     <form onsubmit="searchDeepHistory(event)" class="flex gap-2 mb-4">
-                        <input type="text" id="historySearchInput" placeholder="Scan or type exact AWB..."
+                        <input type="text" id="historySearchInput" placeholder="Scan or type exact AWB..." autocomplete="off" data-1p-ignore data-lpignore="true"
                             class="w-full px-4 py-2 border-2 border-gray-300 rounded focus:border-blue-500 focus:outline-none uppercase font-bold text-gray-700">
                         <button type="submit"
                             class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded shadow-md border border-blue-800">
@@ -551,7 +559,8 @@
                 }
             });
 
-            function loginMasterDevice() {
+            function loginMasterDevice(event) {
+                if (event && typeof event.preventDefault === 'function') event.preventDefault();
                 const email = document.getElementById('authEmail').value;
                 const pass = document.getElementById('authPassword').value;
                 firebase.auth().signInWithEmailAndPassword(email, pass)
@@ -3183,7 +3192,7 @@
                                     </div>
                                     <div class="w-full md:w-1/3 flex flex-col gap-2 shrink-0">
                                         <label class="text-xs font-bold text-gray-500 uppercase tracking-wide">Destination Rack:</label>
-                                        <input type="text" id="bulk-input-${matchCount}" value="BULK-RACK" class="w-full p-3 border-2 border-blue-300 rounded-lg text-center font-black uppercase text-blue-900 focus:border-blue-600 focus:outline-none" placeholder="e.g. BULK-A">
+                                        <input type="text" id="bulk-input-${matchCount}" value="BULK-RACK" autocomplete="off" data-1p-ignore data-lpignore="true" class="w-full p-3 border-2 border-blue-300 rounded-lg text-center font-black uppercase text-blue-900 focus:border-blue-600 focus:outline-none" placeholder="e.g. BULK-A">
                                         <button onclick="moveParcelsToBulk('${stringifiedIds}', '${name.replace(/'/g, "\\'")}', 'bulk-input-${matchCount}')" class="bg-blue-800 text-white font-bold px-6 py-4 rounded-lg hover:bg-blue-900 transition shadow-md w-full text-lg border-2 border-blue-900 mt-2">
                                             📦 Mark as MOVED
                                         </button>
@@ -3379,7 +3388,7 @@
             <div id="uiDialogTitle" class="text-lg font-black text-gray-900 mb-2"></div>
             <div id="uiDialogBody" class="text-sm text-gray-700 mb-4 whitespace-pre-line"></div>
             <div id="uiDialogInputWrap" class="mb-4 hidden">
-                <input type="password" id="uiDialogInput" class="w-full p-3 border-2 border-gray-300 rounded-lg text-center font-black text-xl" />
+                <input type="text" id="uiDialogInput" inputmode="numeric" autocomplete="off" data-1p-ignore data-lpignore="true" class="masked-input w-full p-3 border-2 border-gray-300 rounded-lg text-center font-black text-xl" />
             </div>
             <div class="flex gap-2 justify-end">
                 <button id="uiDialogCancel" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-lg transition">Cancel</button>
