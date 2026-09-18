@@ -477,7 +477,8 @@
                                 staffProfiles: shopData.staffProfiles,
                                 tier: shopData.tier,
                                 shopName: shopData.shopName,
-                                rackLayout: shopData.rackLayout
+                                rackLayout: shopData.rackLayout,
+                                autoEndShiftMinutes: shopData.autoEndShiftMinutes
                             }));
                         } catch (e) { /* ignore quota errors */ }
 
@@ -492,6 +493,10 @@
             function renderStaffButtons(shopData) {
                 currentShopTier = shopData.tier ? shopData.tier.toLowerCase() : 'basic';
                 currentRackLayout = shopData.rackLayout || null;
+                // ⏰ AUTO END-SHIFT TIMEOUT: Firestore-driven (shops/<id>.autoEndShiftMinutes),
+                // same pattern as rackLayout — tune per shop with no redeploy. Default 30 min.
+                const idleMins = parseInt(shopData.autoEndShiftMinutes, 10);
+                idleTimeoutMs = (Number.isFinite(idleMins) && idleMins > 0 ? idleMins : 30) * 60 * 1000;
                 document.title = `${shopData.shopName} - PUDO WMS`;
 
                 let maxStaffAllowed = 3;
@@ -1004,6 +1009,7 @@
                 const enteredPin = await uiPrompt(`Enter PIN for ${name}:`, 'Staff Login');
                 if (enteredPin === correctPin) {
                     currentUser = name;
+                    resetIdleWatch(name); // ⏰ arm the auto end-shift watchdog (Admin is exempt)
                     document.getElementById('currentUserDisplay').textContent = name;
                     document.getElementById('section-login').classList.add('hidden');
                     document.getElementById('wms-ui').classList.remove('hidden');
@@ -1016,7 +1022,8 @@
                 }
             }
 
-            function logout() {
+            function logout(reason) {
+                stopIdleWatch(); // ⏰ disarm the auto end-shift watchdog
                 currentUser = null;
                 detachActiveParcelListener();
                 document.getElementById('wms-ui').classList.add('hidden');
@@ -1034,6 +1041,121 @@
                     });
                 }
             }
+
+            // --- AUTO END-SHIFT (IDLE) ENGINE ---
+            // Ends the active shift profile after a period of inactivity.
+            //  • PWA background throttling freezes setInterval, so we compare wall-clock
+            //    timestamps (not tick counts) and re-check on visibilitychange.
+            //  • A 60s "Tap to stay" warning ALWAYS precedes the logout — never a silent cut.
+            //  • Admin is exempt. Timeout is Firestore-driven (autoEndShiftMinutes, default 30).
+            let idleTimeoutMs = 30 * 60 * 1000;
+            const IDLE_WARN_MS = 60 * 1000;   // "Tap to stay" countdown
+            const IDLE_CHECK_MS = 15 * 1000;  // how often we evaluate idleness
+            let lastActivityAt = 0;
+            let idleWatchTimer = null;
+            let idleWarnTimer = null;
+            let idleWarningActive = false;
+            let idleCountdownEndsAt = 0;
+
+            function registerActivity() {
+                lastActivityAt = Date.now();
+                if (idleWarningActive) dismissIdleWarning(true);
+            }
+
+            // Defer the countdown while a modal is open or scans are still queued for retry,
+            // so the shift is never ended while a write is in flight.
+            function isBusyNow() {
+                const dlg = document.getElementById('uiDialogOverlay');
+                if (dlg && !dlg.classList.contains('hidden')) return true;
+                if (typeof hasFailedScans !== 'undefined' && hasFailedScans) return true;
+                return false;
+            }
+
+            function resetIdleWatch(name) {
+                stopIdleWatch();
+                lastActivityAt = Date.now();
+                if (!name || name.toUpperCase() === 'ADMIN') return; // ⚙️ Admin never auto-logs-out
+                idleWatchTimer = setInterval(checkIdle, IDLE_CHECK_MS);
+            }
+
+            function stopIdleWatch() {
+                if (idleWatchTimer) { clearInterval(idleWatchTimer); idleWatchTimer = null; }
+                if (idleWarnTimer) { clearInterval(idleWarnTimer); idleWarnTimer = null; }
+                if (idleWarningActive) {
+                    idleWarningActive = false;
+                    const ov = document.getElementById('idleWarningOverlay');
+                    if (ov) ov.classList.add('hidden');
+                }
+            }
+
+            function checkIdle() {
+                if (!currentUser || idleWarningActive) return;
+                if (isBusyNow()) { lastActivityAt = Date.now(); return; } // defer while busy
+                if (Date.now() - lastActivityAt >= idleTimeoutMs) showIdleWarning();
+            }
+
+            function showIdleWarning() {
+                idleWarningActive = true;
+                idleCountdownEndsAt = Date.now() + IDLE_WARN_MS;
+                const ov = document.getElementById('idleWarningOverlay');
+                if (ov) ov.classList.remove('hidden');
+                playIdleWarningBeep();
+                updateIdleCountdown();
+                idleWarnTimer = setInterval(updateIdleCountdown, 1000);
+            }
+
+            function updateIdleCountdown() {
+                const remaining = Math.max(0, Math.ceil((idleCountdownEndsAt - Date.now()) / 1000));
+                const el = document.getElementById('idleCountdown');
+                if (el) el.textContent = remaining;
+                if (remaining > 0) return;
+                if (idleWarnTimer) { clearInterval(idleWarnTimer); idleWarnTimer = null; }
+                if (isBusyNow()) {
+                    // Still busy (modal open / retries pending) — grant another minute.
+                    idleCountdownEndsAt = Date.now() + IDLE_WARN_MS;
+                    idleWarnTimer = setInterval(updateIdleCountdown, 1000);
+                    return;
+                }
+                idleWarningActive = false;
+                const ov = document.getElementById('idleWarningOverlay');
+                if (ov) ov.classList.add('hidden');
+                showToast('🌙 Shift ended automatically after inactivity.', 'info');
+                logout('idle');
+            }
+
+            function dismissIdleWarning(silent) {
+                if (idleWarnTimer) { clearInterval(idleWarnTimer); idleWarnTimer = null; }
+                idleWarningActive = false;
+                const ov = document.getElementById('idleWarningOverlay');
+                if (ov) ov.classList.add('hidden');
+                lastActivityAt = Date.now();
+                if (!silent) showToast('👋 Welcome back — shift still active.', 'success');
+            }
+
+            function playIdleWarningBeep() {
+                try {
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    function playNote(freq, startTime) {
+                        const osc = audioCtx.createOscillator();
+                        const gainNode = audioCtx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, startTime);
+                        gainNode.gain.setValueAtTime(0.7, startTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.35);
+                        osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+                        osc.start(startTime); osc.stop(startTime + 0.35);
+                    }
+                    const now = audioCtx.currentTime;
+                    playNote(660, now); playNote(880, now + 0.25);
+                } catch (e) { }
+            }
+
+            // Any tap / key / touch anywhere counts as activity (capture phase so it
+            // registers even if a handler calls stopPropagation).
+            ['pointerdown', 'keydown', 'touchstart', 'click'].forEach((evt) => {
+                document.addEventListener(evt, registerActivity, { capture: true, passive: true });
+            });
+            document.addEventListener('visibilitychange', () => { if (!document.hidden) checkIdle(); });
 
             // --- AUDIO ENGINE ---
             function playSuccessBeep() {
@@ -3263,6 +3385,18 @@
                 <button id="uiDialogCancel" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-lg transition">Cancel</button>
                 <button id="uiDialogOk" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">OK</button>
             </div>
+        </div>
+    </div>
+    <!-- Idle auto end-shift warning (tap anywhere to stay) -->
+    <div id="idleWarningOverlay" class="fixed inset-0 bg-gray-900 bg-opacity-80 z-[10001] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 text-center">
+            <div class="text-4xl mb-2">⏳</div>
+            <div class="text-lg font-black text-gray-900 mb-2">Are you still there?</div>
+            <div class="text-sm text-gray-700 mb-4">This shift will end automatically in
+                <span id="idleCountdown" class="font-black text-red-600 text-xl">60</span> seconds.</div>
+            <button onclick="dismissIdleWarning()"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">✋ Tap
+                to stay</button>
         </div>
     </div>
     <script>
